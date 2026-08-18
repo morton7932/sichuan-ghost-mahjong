@@ -42,6 +42,8 @@ test("includes the cockatoo one-bamboo pair and excludes flower tiles", async ()
 
   assert.match(source, /guaranteedSouOne/);
   assert.match(source, /tile\.kind === "suo-1"/);
+  assert.doesNotMatch(source, /tile-fallback/);
+  assert.doesNotMatch(css, /tile-fallback/);
   assert.match(css, /\.suo-1 \.tile-art/);
   assert.match(css, /background-color:\s*#0d5543/);
   assert.match(css, /mahjong-tile-base-v2\.png/);
