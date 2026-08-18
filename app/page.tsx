@@ -1,10 +1,33 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-const ROWS = 8;
-const COLS = 12;
 const START_TIME = 180;
+
+type DifficultyId = "beginner" | "standard" | "expert";
+type Difficulty = {
+  id: DifficultyId;
+  label: string;
+  rows: number;
+  cols: number;
+  multiplier: number;
+  detail: string;
+};
+
+const DIFFICULTIES: Difficulty[] = [
+  { id: "beginner", label: "入門", rows: 6, cols: 8, multiplier: 1, detail: "牌少、路線較寬" },
+  { id: "standard", label: "標準", rows: 8, cols: 10, multiplier: 1.25, detail: "均衡的牌局節奏" },
+  { id: "expert", label: "挑戰", rows: 8, cols: 12, multiplier: 1.5, detail: "牌多、得分最高" },
+];
+const DEFAULT_DIFFICULTY: DifficultyId = "standard";
+
+function difficultyById(id: DifficultyId): Difficulty {
+  return DIFFICULTIES.find((difficulty) => difficulty.id === id) ?? DIFFICULTIES[1];
+}
+
+function isDifficultyId(value: unknown): value is DifficultyId {
+  return DIFFICULTIES.some((difficulty) => difficulty.id === value);
+}
 
 type TileGroup = "wan" | "tong" | "suo" | "wind" | "dragon" | "ghost";
 type Tile = {
@@ -23,9 +46,16 @@ type GhostDraw = {
   activeIndex: number;
   stage: "spinning" | "result";
 };
+type PathPoint = { row: number; col: number };
+type MatchEffect = {
+  indexes: [number, number];
+  path: PathPoint[];
+  diagonal: boolean;
+};
 type SaveData = {
-  version: 1;
+  version: 2;
   playerName: string;
+  difficulty: DifficultyId;
   level: number;
   clearedLevels: number;
   time: number;
@@ -104,8 +134,9 @@ function makeTile(base: Omit<Tile, "uid">, suffix: string, random = Math.random)
   return { ...base, uid: `${base.kind}-${suffix}-${random().toString(36).slice(2, 8)}` };
 }
 
-function buildBoard(level: number, includeGhosts = true, random = Math.random): (Tile | null)[] {
-  const pairCount = ROWS * COLS / 2;
+function buildBoard(level: number, difficultyId: DifficultyId, includeGhosts = true, random = Math.random): (Tile | null)[] {
+  const { rows, cols } = difficultyById(difficultyId);
+  const pairCount = rows * cols / 2;
   const bases: Omit<Tile, "uid">[] = [];
   const normalPairCount = pairCount - (includeGhosts ? 2 : 0);
   const guaranteedSouOne = normalKinds.find((tile) => tile.kind === "suo-1")!;
@@ -127,11 +158,11 @@ function buildBoard(level: number, includeGhosts = true, random = Math.random): 
   ];
 }
 
-function isDiagonalMatch(a: number, b: number): boolean {
-  const ar = Math.floor(a / COLS);
-  const ac = a % COLS;
-  const br = Math.floor(b / COLS);
-  const bc = b % COLS;
+function isDiagonalMatch(a: number, b: number, cols: number): boolean {
+  const ar = Math.floor(a / cols);
+  const ac = a % cols;
+  const br = Math.floor(b / cols);
+  const bc = b % cols;
   const dr = br - ar;
   const dc = bc - ac;
   // 本作的特色規則：只要兩張相同牌位於同一條 45° 斜線，
@@ -139,34 +170,59 @@ function isDiagonalMatch(a: number, b: number): boolean {
   return Math.abs(dr) === Math.abs(dc) && dr !== 0;
 }
 
-function isTwoTurnClear(board: (Tile | null)[], a: number, b: number): boolean {
-  const height = ROWS + 2;
-  const width = COLS + 2;
-  const start = [Math.floor(a / COLS) + 1, a % COLS + 1];
-  const end = [Math.floor(b / COLS) + 1, b % COLS + 1];
+function compressPath(points: [number, number][]): [number, number][] {
+  if (points.length <= 2) return points;
+  const result = [points[0]];
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const previous = points[index - 1];
+    const current = points[index];
+    const next = points[index + 1];
+    const firstDirection = [current[0] - previous[0], current[1] - previous[1]];
+    const secondDirection = [next[0] - current[0], next[1] - current[1]];
+    if (firstDirection[0] !== secondDirection[0] || firstDirection[1] !== secondDirection[1]) result.push(current);
+  }
+  result.push(points[points.length - 1]);
+  return result;
+}
+
+function findTwoTurnPath(board: (Tile | null)[], a: number, b: number, rows: number, cols: number): PathPoint[] | null {
+  const height = rows + 2;
+  const width = cols + 2;
+  const start: [number, number] = [Math.floor(a / cols) + 1, a % cols + 1];
+  const end: [number, number] = [Math.floor(b / cols) + 1, b % cols + 1];
   const blocked = (r: number, c: number) => {
     if (r === 0 || c === 0 || r === height - 1 || c === width - 1) return false;
-    const index = (r - 1) * COLS + (c - 1);
+    const index = (r - 1) * cols + (c - 1);
     return index !== a && index !== b && board[index] !== null;
   };
   const directions = [[-1, 0], [0, 1], [1, 0], [0, -1]];
   const seen = Array.from({ length: height }, () =>
     Array.from({ length: width }, () => [3, 3, 3, 3]),
   );
-  const queue: [number, number, number, number][] = [];
+  const queue: { r: number; c: number; dir: number; turns: number; previous: number }[] = [];
 
   directions.forEach(([dr, dc], dir) => {
     const nr = start[0] + dr;
     const nc = start[1] + dc;
     if (nr >= 0 && nr < height && nc >= 0 && nc < width && !blocked(nr, nc)) {
       seen[nr][nc][dir] = 0;
-      queue.push([nr, nc, dir, 0]);
+      queue.push({ r: nr, c: nc, dir, turns: 0, previous: -1 });
     }
   });
 
   for (let head = 0; head < queue.length; head += 1) {
-    const [r, c, dir, turns] = queue[head];
-    if (r === end[0] && c === end[1]) return true;
+    const { r, c, dir, turns } = queue[head];
+    if (r === end[0] && c === end[1]) {
+      const cells: [number, number][] = [];
+      let cursor = head;
+      while (cursor >= 0) {
+        const item = queue[cursor];
+        cells.push([item.r, item.c]);
+        cursor = item.previous;
+      }
+      cells.push(start);
+      return compressPath(cells.reverse()).map(([pathRow, pathCol]) => ({ row: pathRow - 0.5, col: pathCol - 0.5 }));
+    }
     directions.forEach(([dr, dc], nextDir) => {
       const nextTurns = turns + (nextDir === dir ? 0 : 1);
       const nr = r + dr;
@@ -176,18 +232,28 @@ function isTwoTurnClear(board: (Tile | null)[], a: number, b: number): boolean {
         !blocked(nr, nc) && seen[nr][nc][nextDir] > nextTurns
       ) {
         seen[nr][nc][nextDir] = nextTurns;
-        queue.push([nr, nc, nextDir, nextTurns]);
+        queue.push({ r: nr, c: nc, dir: nextDir, turns: nextTurns, previous: head });
       }
     });
   }
-  return false;
+  return null;
 }
 
-function canMatch(board: (Tile | null)[], a: number, b: number): boolean {
+function findMatchPath(board: (Tile | null)[], a: number, b: number, rows: number, cols: number): PathPoint[] | null {
   const first = board[a];
   const second = board[b];
-  if (!first || !second || first.kind !== second.kind || a === b) return false;
-  return isDiagonalMatch(a, b) || isTwoTurnClear(board, a, b);
+  if (!first || !second || first.kind !== second.kind || a === b) return null;
+  if (isDiagonalMatch(a, b, cols)) {
+    return [
+      { row: Math.floor(a / cols) + 0.5, col: a % cols + 0.5 },
+      { row: Math.floor(b / cols) + 0.5, col: b % cols + 0.5 },
+    ];
+  }
+  return findTwoTurnPath(board, a, b, rows, cols);
+}
+
+function canMatch(board: (Tile | null)[], a: number, b: number, rows: number, cols: number): boolean {
+  return findMatchPath(board, a, b, rows, cols) !== null;
 }
 
 function groupPairIndexes(board: (Tile | null)[], excludeGhosts = false): number[][] {
@@ -205,7 +271,7 @@ function groupPairIndexes(board: (Tile | null)[], excludeGhosts = false): number
   return pairs;
 }
 
-function hasMove(board: (Tile | null)[]): boolean {
+function hasMove(board: (Tile | null)[], rows: number, cols: number): boolean {
   const groups = new Map<string, number[]>();
   board.forEach((tile, index) => {
     if (!tile) return;
@@ -214,19 +280,19 @@ function hasMove(board: (Tile | null)[]): boolean {
   for (const indexes of groups.values()) {
     for (let i = 0; i < indexes.length; i += 1) {
       for (let j = i + 1; j < indexes.length; j += 1) {
-        if (canMatch(board, indexes[i], indexes[j])) return true;
+        if (canMatch(board, indexes[i], indexes[j], rows, cols)) return true;
       }
     }
   }
   return false;
 }
 
-function arrangeEasy(board: (Tile | null)[]): (Tile | null)[] {
+function arrangeEasy(board: (Tile | null)[], rows: number, cols: number): (Tile | null)[] {
   const pairs = groupPairIndexes(board);
-  const result: (Tile | null)[] = Array(ROWS * COLS).fill(null);
+  const result: (Tile | null)[] = Array(rows * cols).fill(null);
   let cursor = 0;
   pairs.forEach(([a, b]) => {
-    while (cursor % COLS === COLS - 1) cursor += 1;
+    while (cursor % cols === cols - 1) cursor += 1;
     result[cursor] = board[a];
     result[cursor + 1] = board[b];
     cursor += 2;
@@ -234,15 +300,15 @@ function arrangeEasy(board: (Tile | null)[]): (Tile | null)[] {
   return result;
 }
 
-function arrangeVeryEasy(board: (Tile | null)[]): (Tile | null)[] {
+function arrangeVeryEasy(board: (Tile | null)[], rows: number, cols: number): (Tile | null)[] {
   const pairs = shuffled(groupPairIndexes(board));
-  const result: (Tile | null)[] = Array(ROWS * COLS).fill(null);
+  const result: (Tile | null)[] = Array(rows * cols).fill(null);
   const obviousPairCount = Math.ceil(pairs.length * 0.62);
   const used = new Set<number>();
   let cursor = 0;
 
   pairs.slice(0, obviousPairCount).forEach(([a, b]) => {
-    while (cursor % COLS === COLS - 1 || used.has(cursor) || used.has(cursor + 1)) cursor += 1;
+    while (cursor % cols === cols - 1 || used.has(cursor) || used.has(cursor + 1)) cursor += 1;
     result[cursor] = board[a];
     result[cursor + 1] = board[b];
     used.add(cursor);
@@ -254,55 +320,55 @@ function arrangeVeryEasy(board: (Tile | null)[]): (Tile | null)[] {
     pairs.slice(obviousPairCount).flatMap(([a, b]) => [board[a]!, board[b]!]),
   );
   const remainingSlots = shuffled(
-    Array.from({ length: ROWS * COLS }, (_, index) => index).filter((index) => !used.has(index)),
+    Array.from({ length: rows * cols }, (_, index) => index).filter((index) => !used.has(index)),
   );
   remainingTiles.forEach((tile, index) => { result[remainingSlots[index]] = tile; });
-  return hasMove(result) ? result : arrangeEasy(result);
+  return hasMove(result, rows, cols) ? result : arrangeEasy(result, rows, cols);
 }
 
-function arrangeToward(board: (Tile | null)[], pattern: "up" | "down" | "left" | "right" | "in" | "out"): (Tile | null)[] {
+function arrangeToward(board: (Tile | null)[], pattern: "up" | "down" | "left" | "right" | "in" | "out", rows: number, cols: number): (Tile | null)[] {
   const tiles = shuffled(board.filter(Boolean) as Tile[]);
-  const positions = Array.from({ length: ROWS * COLS }, (_, index) => index);
+  const positions = Array.from({ length: rows * cols }, (_, index) => index);
   positions.sort((a, b) => {
-    const ar = Math.floor(a / COLS), ac = a % COLS;
-    const br = Math.floor(b / COLS), bc = b % COLS;
+    const ar = Math.floor(a / cols), ac = a % cols;
+    const br = Math.floor(b / cols), bc = b % cols;
     if (pattern === "up") return ar - br || ac - bc;
     if (pattern === "down") return br - ar || ac - bc;
     if (pattern === "left") return ac - bc || ar - br;
     if (pattern === "right") return bc - ac || ar - br;
-    const ad = Math.abs(ar - (ROWS - 1) / 2) + Math.abs(ac - (COLS - 1) / 2);
-    const bd = Math.abs(br - (ROWS - 1) / 2) + Math.abs(bc - (COLS - 1) / 2);
+    const ad = Math.abs(ar - (rows - 1) / 2) + Math.abs(ac - (cols - 1) / 2);
+    const bd = Math.abs(br - (rows - 1) / 2) + Math.abs(bc - (cols - 1) / 2);
     return pattern === "in" ? ad - bd : bd - ad;
   });
-  const result: (Tile | null)[] = Array(ROWS * COLS).fill(null);
+  const result: (Tile | null)[] = Array(rows * cols).fill(null);
   tiles.forEach((tile, index) => { result[positions[index]] = tile; });
-  if (!hasMove(result)) {
+  if (!hasMove(result, rows, cols)) {
     const firstPair = groupPairIndexes(result)[0];
     if (firstPair) {
       const [a, b] = firstPair;
-      const adjacent = a % COLS < COLS - 1 ? a + 1 : a - 1;
+      const adjacent = a % cols < cols - 1 ? a + 1 : a - 1;
       [result[adjacent], result[b]] = [result[b], result[adjacent]];
     }
   }
   return result;
 }
 
-function splitRemaining(board: (Tile | null)[], split: "horizontal" | "vertical"): (Tile | null)[] {
+function splitRemaining(board: (Tile | null)[], split: "horizontal" | "vertical", rows: number, cols: number): (Tile | null)[] {
   const pairs = shuffled(groupPairIndexes(board));
   const first: number[] = [];
   const second: number[] = [];
-  for (let row = 0; row < ROWS; row += 1) {
-    for (let col = 0; col < COLS; col += 1) {
-      const index = row * COLS + col;
-      const belongsFirst = split === "horizontal" ? row < ROWS / 2 : col < COLS / 2;
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      const index = row * cols + col;
+      const belongsFirst = split === "horizontal" ? row < rows / 2 : col < cols / 2;
       (belongsFirst ? first : second).push(index);
     }
   }
   const fixedFirst = 0;
-  const fixedSecond = split === "horizontal" ? (ROWS / 2) * COLS : COLS / 2;
+  const fixedSecond = split === "horizontal" ? (rows / 2) * cols : cols / 2;
   const firstSlots = [fixedFirst, ...shuffled(first.filter((index) => index !== fixedFirst))];
   const secondSlots = [fixedSecond, ...shuffled(second.filter((index) => index !== fixedSecond))];
-  const result: (Tile | null)[] = Array(ROWS * COLS).fill(null);
+  const result: (Tile | null)[] = Array(rows * cols).fill(null);
   pairs.forEach(([a, b], pairIndex) => {
     result[firstSlots[pairIndex]] = board[a];
     result[secondSlots[pairIndex]] = board[b];
@@ -310,20 +376,21 @@ function splitRemaining(board: (Tile | null)[], split: "horizontal" | "vertical"
   return result;
 }
 
-function applyGhostEffect(effect: GhostEffectId, board: (Tile | null)[], level: number) {
-  if (effect === "smile") return { board: arrangeVeryEasy(board), bonus: 0, name: "笑臉：牌局變得容易" };
-  if (effect === "angry") return { board: buildBoard(level, false), bonus: 32, name: "生氣：重新塞滿牌桌" };
-  if (effect === "horizontal") return { board: splitRemaining(board, "horizontal"), bonus: 0, name: "上下分邊" };
-  if (effect === "vertical") return { board: splitRemaining(board, "vertical"), bonus: 0, name: "左右分邊" };
+function applyGhostEffect(effect: GhostEffectId, board: (Tile | null)[], level: number, difficultyId: DifficultyId) {
+  const { rows, cols } = difficultyById(difficultyId);
+  if (effect === "smile") return { board: arrangeVeryEasy(board, rows, cols), bonus: 0, name: "笑臉：牌局變得容易" };
+  if (effect === "angry") return { board: buildBoard(level, difficultyId, false), bonus: 32, name: "生氣：重新塞滿牌桌" };
+  if (effect === "horizontal") return { board: splitRemaining(board, "horizontal", rows, cols), bonus: 0, name: "上下分邊" };
+  if (effect === "vertical") return { board: splitRemaining(board, "vertical", rows, cols), bonus: 0, name: "左右分邊" };
   const pattern = effect as "up" | "down" | "left" | "right" | "in" | "out";
   const names = { up: "向上集中", down: "向下集中", left: "向左集中", right: "向右集中", in: "向內集中", out: "向外擴散" };
-  return { board: arrangeToward(board, pattern), bonus: 0, name: names[pattern] };
+  return { board: arrangeToward(board, pattern, rows, cols), bonus: 0, name: names[pattern] };
 }
 
 function shuffleOccupied(board: (Tile | null)[]): (Tile | null)[] {
   const positions = board.map((tile, i) => tile ? i : -1).filter((i) => i >= 0);
   const tiles = shuffled(board.filter(Boolean) as Tile[]);
-  const next: (Tile | null)[] = Array(ROWS * COLS).fill(null);
+  const next: (Tile | null)[] = Array(board.length).fill(null);
   positions.forEach((position, i) => { next[position] = tiles[i]; });
   return next;
 }
@@ -332,13 +399,22 @@ function readSave(): SaveData | null {
   try {
     const raw = window.localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
-    const data = JSON.parse(raw) as Partial<SaveData>;
+    const data = JSON.parse(raw) as Record<string, unknown>;
     if (
-      data.version !== 1 || typeof data.playerName !== "string" ||
+      typeof data.playerName !== "string" ||
       typeof data.level !== "number" || typeof data.clearedLevels !== "number" ||
       typeof data.time !== "number" || typeof data.score !== "number"
     ) return null;
-    return data as SaveData;
+    return {
+      version: 2,
+      playerName: data.playerName,
+      difficulty: isDifficultyId(data.difficulty) ? data.difficulty : "expert",
+      level: data.level,
+      clearedLevels: data.clearedLevels,
+      time: data.time,
+      score: data.score,
+      savedAt: typeof data.savedAt === "string" ? data.savedAt : new Date(0).toISOString(),
+    };
   } catch {
     return null;
   }
@@ -349,10 +425,22 @@ function readRankings(): Ranking[] {
     const raw = window.localStorage.getItem(RANKING_KEY);
     if (!raw) return [];
     const data = JSON.parse(raw);
-    return Array.isArray(data) ? data.filter((entry) =>
-      entry && typeof entry.playerName === "string" && typeof entry.score === "number" &&
-      typeof entry.clearedLevels === "number" && typeof entry.finishedAt === "string",
-    ).slice(0, 30) : [];
+    if (!Array.isArray(data)) return [];
+    return data.flatMap((entry): Ranking[] => {
+      if (!entry || typeof entry.playerName !== "string" || typeof entry.score !== "number" ||
+        typeof entry.clearedLevels !== "number" || typeof entry.finishedAt !== "string") return [];
+      return [{
+        version: 2,
+        playerName: entry.playerName,
+        difficulty: isDifficultyId(entry.difficulty) ? entry.difficulty : "expert",
+        level: typeof entry.level === "number" ? entry.level : entry.clearedLevels + 1,
+        clearedLevels: entry.clearedLevels,
+        time: typeof entry.time === "number" ? entry.time : 0,
+        score: entry.score,
+        savedAt: typeof entry.savedAt === "string" ? entry.savedAt : entry.finishedAt,
+        finishedAt: entry.finishedAt,
+      }];
+    }).slice(0, 30);
   } catch {
     return [];
   }
@@ -373,21 +461,31 @@ export default function Home() {
   const [savedProgress, setSavedProgress] = useState<SaveData | null>(null);
   const [rankings, setRankings] = useState<Ranking[]>([]);
   const [storageReady, setStorageReady] = useState(false);
+  const [difficulty, setDifficulty] = useState<DifficultyId>(DEFAULT_DIFFICULTY);
   const [level, setLevel] = useState(1);
   const [time, setTime] = useState(START_TIME);
   const [score, setScore] = useState(0);
-  const [board, setBoard] = useState<(Tile | null)[]>(() => buildBoard(1, true, seededRandom(314159)));
+  const [board, setBoard] = useState<(Tile | null)[]>(() => buildBoard(1, DEFAULT_DIFFICULTY, true, seededRandom(314159)));
   const [selected, setSelected] = useState<number | null>(null);
+  const [rejectedIndex, setRejectedIndex] = useState<number | null>(null);
+  const [matchEffect, setMatchEffect] = useState<MatchEffect | null>(null);
+  const [clearingIndexes, setClearingIndexes] = useState<number[]>([]);
+  const [timeGainPulse, setTimeGainPulse] = useState(0);
   const [phase, setPhase] = useState<Phase>("playing");
   const [message, setMessage] = useState("牌局開始：找出第一對牌吧");
   const [showRules, setShowRules] = useState(false);
   const [levelBonus, setLevelBonus] = useState(0);
   const [ghostDraw, setGhostDraw] = useState<GhostDraw | null>(null);
   const ghostTokenRef = useRef(0);
+  const animationTokenRef = useRef(0);
   const rankingRecordedRef = useRef(false);
 
+  const difficultyConfig = useMemo(() => difficultyById(difficulty), [difficulty]);
+  const { rows, cols, multiplier } = difficultyConfig;
   const remaining = useMemo(() => board.filter(Boolean).length, [board]);
-  const progress = ((ROWS * COLS - remaining) / (ROWS * COLS)) * 100;
+  const progress = ((rows * cols - remaining) / (rows * cols)) * 100;
+  const inputLocked = phase !== "playing" || matchEffect !== null || clearingIndexes.length > 0;
+  const awardPoints = useCallback((base: number) => Math.round(base * multiplier), [multiplier]);
 
   useEffect(() => {
     const hydrationTimer = window.setTimeout(() => {
@@ -396,13 +494,14 @@ export default function Home() {
       setSavedProgress(save);
       setRankings(storedRankings);
       if (save?.playerName) setPlayerName(save.playerName);
+      if (save?.difficulty) setDifficulty(save.difficulty);
       setStorageReady(true);
     }, 0);
     return () => window.clearTimeout(hydrationTimer);
   }, []);
 
   const createCheckpoint = useCallback((data: Omit<SaveData, "version" | "savedAt">) => {
-    const save: SaveData = { ...data, version: 1, savedAt: new Date().toISOString() };
+    const save: SaveData = { ...data, version: 2, savedAt: new Date().toISOString() };
     if (writeSave(save)) setSavedProgress(save);
     return save;
   }, []);
@@ -418,19 +517,23 @@ export default function Home() {
   const startNewGame = useCallback(() => {
     const name = playerName.trim().slice(0, 12) || "玩家";
     ghostTokenRef.current += 1;
+    animationTokenRef.current += 1;
     rankingRecordedRef.current = false;
     setPlayerName(name);
     setLevel(1);
     setTime(START_TIME);
     setScore(0);
-    setBoard(buildBoard(1));
+    setBoard(buildBoard(1, difficulty));
     setSelected(null);
+    setRejectedIndex(null);
+    setMatchEffect(null);
+    setClearingIndexes([]);
     setGhostDraw(null);
     setPhase("playing");
     setMessage("牌局開始：找出第一對牌吧");
-    createCheckpoint({ playerName: name, level: 1, clearedLevels: 0, time: START_TIME, score: 0 });
+    createCheckpoint({ playerName: name, difficulty, level: 1, clearedLevels: 0, time: START_TIME, score: 0 });
     setScreen("game");
-  }, [createCheckpoint, playerName]);
+  }, [createCheckpoint, difficulty, playerName]);
 
   const loadGame = useCallback(() => {
     const save = readSave();
@@ -439,13 +542,18 @@ export default function Home() {
       return;
     }
     ghostTokenRef.current += 1;
+    animationTokenRef.current += 1;
     rankingRecordedRef.current = false;
     setPlayerName(save.playerName);
+    setDifficulty(save.difficulty);
     setLevel(save.level);
     setTime(Math.max(1, Math.floor(save.time)));
     setScore(Math.max(0, Math.floor(save.score)));
-    setBoard(buildBoard(save.level));
+    setBoard(buildBoard(save.level, save.difficulty));
     setSelected(null);
+    setRejectedIndex(null);
+    setMatchEffect(null);
+    setClearingIndexes([]);
     setGhostDraw(null);
     setPhase("playing");
     setMessage(`已讀取進度：從第 ${save.level} 關開局重新開始`);
@@ -454,7 +562,10 @@ export default function Home() {
 
   const returnToMenu = useCallback(() => {
     ghostTokenRef.current += 1;
+    animationTokenRef.current += 1;
     setGhostDraw(null);
+    setMatchEffect(null);
+    setClearingIndexes([]);
     setShowRules(false);
     setSavedProgress(readSave());
     setRankings(readRankings());
@@ -485,6 +596,7 @@ export default function Home() {
       setMessage(`清盤！下一關獎勵 ${bonus} 秒`);
       createCheckpoint({
         playerName,
+        difficulty,
         level: level + 1,
         clearedLevels: level,
         time: time + bonus,
@@ -492,7 +604,7 @@ export default function Home() {
       });
     }, 0);
     return () => window.clearTimeout(resultTimer);
-  }, [createCheckpoint, level, phase, playerName, remaining, score, screen, time]);
+  }, [createCheckpoint, difficulty, level, phase, playerName, remaining, score, screen, time]);
 
   const enterNextLevel = useCallback(() => {
     if (phase !== "levelup") return;
@@ -500,18 +612,20 @@ export default function Home() {
     const nextTime = time + levelBonus;
     setLevel(nextLevel);
     setTime(nextTime);
-    setBoard(buildBoard(nextLevel));
+    setBoard(buildBoard(nextLevel, difficulty));
     setSelected(null);
+    setRejectedIndex(null);
     setPhase("playing");
     setMessage(`第 ${nextLevel} 關開始，剩餘時間已承接`);
     createCheckpoint({
       playerName,
+      difficulty,
       level: nextLevel,
       clearedLevels: nextLevel - 1,
       time: nextTime,
       score,
     });
-  }, [createCheckpoint, level, levelBonus, phase, playerName, score, time]);
+  }, [createCheckpoint, difficulty, level, levelBonus, phase, playerName, score, time]);
 
   useEffect(() => {
     if (screen !== "game" || phase !== "levelup") return;
@@ -520,14 +634,14 @@ export default function Home() {
   }, [enterNextLevel, phase, screen]);
 
   useEffect(() => {
-    if (screen !== "game" || phase !== "playing" || remaining === 0 || hasMove(board)) return;
+    if (screen !== "game" || phase !== "playing" || remaining === 0 || hasMove(board, rows, cols)) return;
     const rescue = window.setTimeout(() => {
-      setBoard((current) => arrangeEasy(current));
+      setBoard((current) => arrangeEasy(current, rows, cols));
       setSelected(null);
       setMessage("盤面暫無解，已免費整牌一次");
     }, 450);
     return () => window.clearTimeout(rescue);
-  }, [board, phase, remaining, screen]);
+  }, [board, cols, phase, remaining, rows, screen]);
 
   const triggerGhostEffect = useCallback((sourceBoard: (Tile | null)[]) => {
     const selectedEffectIndex = drawGhostEffectIndex();
@@ -555,17 +669,17 @@ export default function Home() {
       if (ghostTokenRef.current !== token) return;
 
       const chosen = GHOST_EFFECTS[selectedEffectIndex];
-      const effect = applyGhostEffect(chosen.id, sourceBoard, level);
+      const effect = applyGhostEffect(chosen.id, sourceBoard, level, difficulty);
       setBoard(effect.board);
       if (effect.bonus) setTime((current) => current + effect.bonus);
       setMessage(`鬼臉效果｜${effect.name}${effect.bonus ? `，補償 ${effect.bonus} 秒` : ""}！`);
       setGhostDraw(null);
       setPhase("playing");
     })();
-  }, [level]);
+  }, [difficulty, level]);
 
   const selectTile = useCallback((index: number) => {
-    if (phase !== "playing" || !board[index]) return;
+    if (inputLocked || !board[index]) return;
     if (selected === null) {
       setSelected(index);
       setMessage("再選一張相同的牌");
@@ -576,7 +690,11 @@ export default function Home() {
       setMessage("已取消選牌");
       return;
     }
-    if (!canMatch(board, selected, index)) {
+    const path = findMatchPath(board, selected, index, rows, cols);
+    if (!path) {
+      const rejected = selected;
+      setRejectedIndex(rejected);
+      window.setTimeout(() => setRejectedIndex((current) => current === rejected ? null : current), 320);
       setSelected(index);
       setMessage(board[selected]?.kind === board[index]?.kind ? "路線被擋住了，換一組試試" : "花色不同，已改選這張牌");
       return;
@@ -586,66 +704,86 @@ export default function Home() {
     const next = [...board];
     next[selected] = null;
     next[index] = null;
+    const diagonal = isDiagonalMatch(selected, index, cols);
+    const token = animationTokenRef.current + 1;
+    animationTokenRef.current = token;
     setSelected(null);
-    setScore((current) => current + (matched.group === "ghost" ? 500 : 100));
+    setRejectedIndex(null);
+    setMatchEffect({ indexes: [selected, index], path, diagonal });
+    setScore((current) => current + awardPoints(matched.group === "ghost" ? 500 : 100));
     setTime((current) => current + 4);
+    setTimeGainPulse((current) => current + 1);
+    setMessage(diagonal ? "長斜線連線成立！ +4 秒" : "路徑連線成立！ +4 秒");
 
-    if (matched.kind === "ghost-mask") {
-      triggerGhostEffect(next);
-    } else {
-      setBoard(next);
-      setMessage(isDiagonalMatch(selected, index) ? "長斜線對消！ +4 秒" : "配對成功！ +4 秒");
-    }
-  }, [board, phase, selected, triggerGhostEffect]);
+    window.setTimeout(() => {
+      if (animationTokenRef.current !== token) return;
+      setMatchEffect(null);
+      if (matched.kind === "ghost-mask") triggerGhostEffect(next);
+      else setBoard(next);
+    }, 430);
+  }, [awardPoints, board, cols, inputLocked, rows, selected, triggerGhostEffect]);
 
   const activateW = useCallback(() => {
-    if (phase !== "playing") return;
+    if (inputLocked) return;
     const pairs = groupPairIndexes(board, true).slice(0, 2);
     if (pairs.length === 0) {
       setMessage("已沒有可供神機拿牌的普通牌");
       return;
     }
+    const indexes = pairs.flat();
     const next = [...board];
-    pairs.flat().forEach((index) => { next[index] = null; });
+    indexes.forEach((index) => { next[index] = null; });
+    const token = animationTokenRef.current + 1;
+    animationTokenRef.current = token;
+    setClearingIndexes(indexes);
     charge(40);
-    setScore((current) => current + pairs.length * 60);
-    setBoard(next);
+    setScore((current) => current + awardPoints(pairs.length * 60));
     setSelected(null);
     setMessage(`神機拿牌：消去 ${pairs.length} 組，未獲得加時`);
-  }, [board, charge, phase]);
+    window.setTimeout(() => {
+      if (animationTokenRef.current !== token) return;
+      setBoard(next);
+      setClearingIndexes([]);
+    }, 350);
+  }, [awardPoints, board, charge, inputLocked]);
 
   const activateA = useCallback(() => {
-    if (phase !== "playing") return;
+    if (inputLocked) return;
     if (selected === null || !board[selected]) {
       setMessage("先選一張牌，再使用同花消牌");
       return;
     }
     const kind = board[selected]!.kind;
     const matches = board.filter((tile) => tile?.kind === kind).length;
+    const indexes = board.map((tile, index) => tile?.kind === kind ? index : -1).filter((index) => index >= 0);
     const next = board.map((tile) => tile?.kind === kind ? null : tile);
+    const token = animationTokenRef.current + 1;
+    animationTokenRef.current = token;
+    setClearingIndexes(indexes);
     charge(30);
-    setScore((current) => current + matches * 25);
+    setScore((current) => current + awardPoints(matches * 25));
     setSelected(null);
-    if (kind === "ghost-mask") {
-      triggerGhostEffect(next);
-    } else {
-      setBoard(next);
-      setMessage(`同花消牌：消去 ${matches} 張，未獲得加時`);
-    }
-  }, [board, charge, phase, selected, triggerGhostEffect]);
+    setMessage(`同花消牌：消去 ${matches} 張，未獲得加時`);
+    window.setTimeout(() => {
+      if (animationTokenRef.current !== token) return;
+      setClearingIndexes([]);
+      if (kind === "ghost-mask") triggerGhostEffect(next);
+      else setBoard(next);
+    }, 350);
+  }, [awardPoints, board, charge, inputLocked, selected, triggerGhostEffect]);
 
   const activateS = useCallback(() => {
-    if (phase !== "playing") return;
+    if (inputLocked) return;
     charge(70);
     let next = shuffleOccupied(board);
-    for (let i = 0; i < 12 && !hasMove(next); i += 1) next = shuffleOccupied(board);
-    setBoard(hasMove(next) ? next : arrangeEasy(next));
+    for (let i = 0; i < 12 && !hasMove(next, rows, cols); i += 1) next = shuffleOccupied(board);
+    setBoard(hasMove(next, rows, cols) ? next : arrangeEasy(next, rows, cols));
     setSelected(null);
     setMessage("移位大法：所有麻將已重新落位");
-  }, [board, charge, phase]);
+  }, [board, charge, cols, inputLocked, rows]);
 
   const activateD = useCallback(() => {
-    if (phase !== "playing") return;
+    if (inputLocked) return;
     const occupied = shuffled(board.map((tile, i) => tile ? i : -1).filter((i) => i >= 0));
     let count = Math.max(4, Math.floor(occupied.length * 0.46));
     if (count % 2) count -= 1;
@@ -657,7 +795,7 @@ export default function Home() {
     setBoard(next);
     setSelected(null);
     setMessage(`乾坤挪移：暗中調換了 ${count} 張牌`);
-  }, [board, charge, phase]);
+  }, [board, charge, inputLocked]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -684,8 +822,9 @@ export default function Home() {
     rankingRecordedRef.current = true;
     const now = new Date().toISOString();
     const entry: Ranking = {
-      version: 1,
+      version: 2,
       playerName,
+      difficulty,
       level,
       clearedLevels: Math.max(0, level - 1),
       time,
@@ -698,7 +837,7 @@ export default function Home() {
       .slice(0, 30);
     try { window.localStorage.setItem(RANKING_KEY, JSON.stringify(next)); } catch { /* 瀏覽器停用儲存時仍可遊玩 */ }
     setRankings(next);
-  }, [level, phase, playerName, score, screen, time]);
+  }, [difficulty, level, phase, playerName, score, screen, time]);
 
   const timeUrgency = time <= 30 ? "danger" : time <= 60 ? "warning" : "safe";
 
@@ -727,12 +866,31 @@ export default function Home() {
                   aria-label="玩家名稱"
                 />
               </label>
+              <fieldset className="difficulty-picker">
+                <legend>盤面大小・難度</legend>
+                <div>
+                  {DIFFICULTIES.map((option) => (
+                    <button
+                      type="button"
+                      key={option.id}
+                      className={difficulty === option.id ? "active" : ""}
+                      aria-pressed={difficulty === option.id}
+                      onClick={() => setDifficulty(option.id)}
+                    >
+                      <strong>{option.label}</strong>
+                      <b>{option.rows} × {option.cols}</b>
+                      <small>{option.detail}</small>
+                      <em>分數 ×{option.multiplier}</em>
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
               <nav className="menu-actions" aria-label="主選單">
                 <button onClick={startNewGame}><b>開始遊玩</b><small>從第 1 關展開新牌局</small></button>
                 <button onClick={loadGame} disabled={!storageReady || !savedProgress}>
                   <b>讀取進度</b>
                   <small>{savedProgress
-                    ? `第 ${savedProgress.level} 關・${savedProgress.time} 秒・${savedProgress.score.toLocaleString("zh-TW")} 分`
+                    ? `${difficultyById(savedProgress.difficulty).label} ${difficultyById(savedProgress.difficulty).rows}×${difficultyById(savedProgress.difficulty).cols}・第 ${savedProgress.level} 關・${savedProgress.score.toLocaleString("zh-TW")} 分`
                     : storageReady ? "此瀏覽器尚無存檔" : "正在讀取…"}</small>
                 </button>
                 <button onClick={() => setScreen("leaderboard")}><b>排行榜</b><small>查看此瀏覽器的最佳牌局</small></button>
@@ -756,7 +914,7 @@ export default function Home() {
                     <li key={`${entry.finishedAt}-${index}`}>
                       <span className="rank-number">{String(index + 1).padStart(2, "0")}</span>
                       <strong>{entry.playerName}</strong>
-                      <span>過 {entry.clearedLevels} 關</span>
+                      <span>{difficultyById(entry.difficulty).label} {difficultyById(entry.difficulty).rows}×{difficultyById(entry.difficulty).cols}・過 {entry.clearedLevels} 關</span>
                       <b>{entry.score.toLocaleString("zh-TW")}</b>
                     </li>
                   ))}
@@ -795,12 +953,13 @@ export default function Home() {
       </header>
 
       <section className="hud" aria-label="遊戲狀態">
-        <div className="hud-block"><span>關卡</span><strong>{String(level).padStart(2, "0")}</strong></div>
+        <div className="hud-block"><span>關卡</span><strong>{String(level).padStart(2, "0")}</strong><em>{difficultyConfig.label} {rows}×{cols}・分數 ×{multiplier}</em></div>
         <div className={`timer ${timeUrgency}`} aria-live="polite">
           <span className="timer-mark">時</span>
           <div><span>剩餘時間</span><strong>{Math.floor(time / 60)}:{String(time % 60).padStart(2, "0")}</strong></div>
+          {timeGainPulse > 0 && <b className="time-gain" key={timeGainPulse}>+4 秒</b>}
         </div>
-        <div className="hud-block hud-score"><span>得分</span><strong>{score.toLocaleString("zh-TW")}</strong><em>剩 {remaining / 2} 組</em></div>
+        <div className="hud-block hud-score"><span>得分</span><strong className="score-value" key={score}>{score.toLocaleString("zh-TW")}</strong><em>剩 {remaining / 2} 組</em></div>
       </section>
 
       <div className="play-layout">
@@ -808,15 +967,20 @@ export default function Home() {
           <div className="progress-track" aria-label={`本關完成 ${Math.round(progress)}%`}><span style={{ width: `${progress}%` }} /></div>
           <div className="table-label"><span>同一條 45° 斜線即可遠距對消</span></div>
           <div className="mahjong-table">
-            <div className="board" role="grid" aria-label="四川省麻將牌盤">
+            <div
+              className="board"
+              role="grid"
+              aria-label={`${difficultyConfig.label} ${rows} 乘 ${cols} 四川省麻將牌盤`}
+              style={{ "--board-cols": cols, "--board-max-width": `${Math.min(1080, cols * 88)}px` } as CSSProperties}
+            >
               {board.map((tile, index) => (
                 <div className="cell" role="gridcell" key={index}>
                   {tile && (
                     <button
                       type="button"
-                      className={`tile tile-${tile.group} ${selected === index ? "selected" : ""} ${tile.kind}`}
+                      className={`tile tile-${tile.group} ${selected === index ? "selected" : ""} ${rejectedIndex === index ? "rejected" : ""} ${matchEffect?.indexes.includes(index) ? "matching" : ""} ${clearingIndexes.includes(index) ? "clearing" : ""} ${tile.kind}`}
                       onClick={() => selectTile(index)}
-                      aria-label={`${tile.face}${tile.corner}，第 ${Math.floor(index / COLS) + 1} 列第 ${index % COLS + 1} 欄`}
+                      aria-label={`${tile.face}${tile.corner}，第 ${Math.floor(index / cols) + 1} 列第 ${index % cols + 1} 欄`}
                       aria-pressed={selected === index}
                     >
                       {tile.group === "ghost" ? (
@@ -834,6 +998,13 @@ export default function Home() {
                   )}
                 </div>
               ))}
+              {matchEffect && (
+                <svg className={`match-path ${matchEffect.diagonal ? "diagonal" : "orthogonal"}`} viewBox={`0 0 ${cols} ${rows}`} preserveAspectRatio="none" aria-hidden="true">
+                  <polyline className="match-path-glow" pathLength="1" points={matchEffect.path.map((point) => `${point.col},${point.row}`).join(" ")} />
+                  <polyline className="match-path-core" pathLength="1" points={matchEffect.path.map((point) => `${point.col},${point.row}`).join(" ")} />
+                  {matchEffect.path.map((point, index) => <circle key={`${point.row}-${point.col}-${index}`} cx={point.col} cy={point.row} r=".09" />)}
+                </svg>
+              )}
             </div>
             <div className="felt-mark felt-mark-left">福</div><div className="felt-mark felt-mark-right">勝</div>
           </div>
@@ -842,10 +1013,10 @@ export default function Home() {
 
         <aside className="cheats" aria-label="秘技">
           <div className="cheat-heading"><span>秘技</span><p>點擊或按鍵盤</p></div>
-          <button onClick={activateW} disabled={phase !== "playing"}><kbd>W</kbd><span><strong>神機拿牌</strong><small>自動消去 2 組</small></span><em>−40秒</em></button>
-          <button onClick={activateA} disabled={phase !== "playing"}><kbd>A</kbd><span><strong>同花消牌</strong><small>先選牌，再消同牌</small></span><em>−30秒</em></button>
-          <button onClick={activateS} disabled={phase !== "playing"}><kbd>S</kbd><span><strong>移位大法</strong><small>重排所有麻將</small></span><em>−70秒</em></button>
-          <button onClick={activateD} disabled={phase !== "playing"}><kbd>D</kbd><span><strong>乾坤挪移</strong><small>暗換部分位置</small></span><em>−50秒</em></button>
+          <button onClick={activateW} disabled={inputLocked}><kbd>W</kbd><span><strong>神機拿牌</strong><small>自動消去 2 組</small></span><em>−40秒</em></button>
+          <button onClick={activateA} disabled={inputLocked}><kbd>A</kbd><span><strong>同花消牌</strong><small>先選牌，再消同牌</small></span><em>−30秒</em></button>
+          <button onClick={activateS} disabled={inputLocked}><kbd>S</kbd><span><strong>移位大法</strong><small>重排所有麻將</small></span><em>−70秒</em></button>
+          <button onClick={activateD} disabled={inputLocked}><kbd>D</kbd><span><strong>乾坤挪移</strong><small>暗換部分位置</small></span><em>−50秒</em></button>
           <div className="cheat-note">秘技消牌不會增加時間</div>
         </aside>
       </div>
@@ -882,7 +1053,7 @@ export default function Home() {
 
       {phase === "levelup" && <div className="overlay" role="status"><div className="result-card level-card"><span className="result-seal">過</span><p>第 {level} 關清盤</p><h2>獎勵 +{levelBonus} 秒</h2><small>剩餘時間將完整帶往下一關，稍候自動進入</small><button onClick={enterNextLevel}>立即進入第 {level + 1} 關</button></div></div>}
 
-      {phase === "over" && <div className="overlay"><div className="result-card"><span className="result-seal">終</span><p>牌局結束</p><h2>{score.toLocaleString("zh-TW")} 分</h2><small>抵達第 {level} 關，成績已存入本機排行榜</small><button onClick={startNewGame}>再開一局</button><button className="secondary-result-button" onClick={returnToMenu}>回主選單</button></div></div>}
+      {phase === "over" && <div className="overlay"><div className="result-card"><span className="result-seal">終</span><p>牌局結束</p><h2>{score.toLocaleString("zh-TW")} 分</h2><small>{difficultyConfig.label} {rows}×{cols}・抵達第 {level} 關，成績已存入本機排行榜</small><button onClick={startNewGame}>再開一局</button><button className="secondary-result-button" onClick={returnToMenu}>回主選單</button></div></div>}
 
       {showRules && (
         <div className="overlay rules-overlay">
