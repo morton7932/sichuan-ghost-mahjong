@@ -822,14 +822,11 @@ export default function Home() {
                       {tile.group === "ghost" ? (
                         <span className="ghost-mask-art" aria-hidden="true"><small>鬼面</small></span>
                       ) : tileAsset(tile) ? (
-                        <>
-                          <span className="tile-fallback" aria-hidden="true">{tile.face}</span>
-                          <span
-                            className="tile-art"
-                            aria-hidden="true"
-                            style={{ backgroundImage: `url("${tileAsset(tile)}")` }}
-                          />
-                        </>
+                        <span
+                          className="tile-art"
+                          aria-hidden="true"
+                          style={{ backgroundImage: `url("${tileAsset(tile)}")` }}
+                        />
                       ) : (
                         <><span className="tile-corner">{tile.corner}</span><span className="tile-face">{tile.face}</span><span className="tile-suit">{tile.corner}</span></>
                       )}
