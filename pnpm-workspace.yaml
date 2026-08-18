@@ -1,0 +1,6 @@
+trustLockfile: true
+
+allowBuilds:
+  esbuild: true
+  sharp: true
+  workerd: true
