@@ -65,3 +65,21 @@ test("uses the familiar seven-dot layout and clear segmented bamboo", async () =
   assert.equal((sevenBamboo.match(/M-9-20Q0-24 9-20/g) ?? []).length, 7);
   assert.doesNotMatch(sevenBamboo, /<rect x="-7"/);
 });
+
+test("offers scored board-size difficulties and lightweight match effects", async () => {
+  const [source, css] = await Promise.all([
+    readFile(pageUrl, "utf8"),
+    readFile(cssUrl, "utf8"),
+  ]);
+
+  assert.match(source, /id: "beginner"[\s\S]*rows: 6, cols: 8[\s\S]*multiplier: 1/);
+  assert.match(source, /id: "standard"[\s\S]*rows: 8, cols: 10[\s\S]*multiplier: 1\.25/);
+  assert.match(source, /id: "expert"[\s\S]*rows: 8, cols: 12[\s\S]*multiplier: 1\.5/);
+  assert.match(source, /difficulty: DifficultyId/);
+  assert.match(source, /className="match-path-core"/);
+  assert.match(source, /findTwoTurnPath/);
+  assert.match(css, /\.tile\.selected::after/);
+  assert.match(css, /@keyframes tile-match/);
+  assert.match(css, /@keyframes path-draw/);
+  assert.match(css, /prefers-reduced-motion/);
+});
