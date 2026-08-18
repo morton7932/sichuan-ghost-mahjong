@@ -63,9 +63,18 @@ type SaveData = {
   savedAt: string;
 };
 type Ranking = SaveData & { finishedAt: string };
+type GameRecordFile = {
+  format: "sichuan-ghost-mahjong-record";
+  version: 1;
+  exportedAt: string;
+  progress: SaveData | null;
+  rankings: Ranking[];
+};
+type RecordNotice = { tone: "success" | "error"; text: string };
 
 const SAVE_KEY = "sichuan-ghost-save-v1";
 const RANKING_KEY = "sichuan-ghost-ranking-v1";
+const RECORD_FORMAT = "sichuan-ghost-mahjong-record";
 
 const numerals = ["一", "二", "三", "四", "五", "六", "七", "八", "九"];
 const normalKinds: Omit<Tile, "uid">[] = [
@@ -395,26 +404,53 @@ function shuffleOccupied(board: (Tile | null)[]): (Tile | null)[] {
   return next;
 }
 
+function normalizeSave(data: unknown): SaveData | null {
+  if (!data || typeof data !== "object") return null;
+  const candidate = data as Record<string, unknown>;
+  if (
+    typeof candidate.playerName !== "string" ||
+    typeof candidate.level !== "number" || !Number.isFinite(candidate.level) || candidate.level < 1 ||
+    typeof candidate.clearedLevels !== "number" || !Number.isFinite(candidate.clearedLevels) || candidate.clearedLevels < 0 ||
+    typeof candidate.time !== "number" || !Number.isFinite(candidate.time) || candidate.time < 0 ||
+    typeof candidate.score !== "number" || !Number.isFinite(candidate.score) || candidate.score < 0
+  ) return null;
+  return {
+    version: 2,
+    playerName: candidate.playerName.trim().slice(0, 12) || "玩家",
+    difficulty: isDifficultyId(candidate.difficulty) ? candidate.difficulty : "expert",
+    level: Math.floor(candidate.level),
+    clearedLevels: Math.floor(candidate.clearedLevels),
+    time: Math.floor(candidate.time),
+    score: Math.floor(candidate.score),
+    savedAt: typeof candidate.savedAt === "string" ? candidate.savedAt : new Date(0).toISOString(),
+  };
+}
+
+function normalizeRanking(data: unknown): Ranking | null {
+  if (!data || typeof data !== "object") return null;
+  const candidate = data as Record<string, unknown>;
+  const finishedAt = candidate.finishedAt;
+  if (typeof finishedAt !== "string") return null;
+  const save = normalizeSave({
+    ...candidate,
+    level: typeof candidate.level === "number" ? candidate.level : Number(candidate.clearedLevels) + 1,
+    time: typeof candidate.time === "number" ? candidate.time : 0,
+    savedAt: typeof candidate.savedAt === "string" ? candidate.savedAt : finishedAt,
+  });
+  if (!save) return null;
+  return { ...save, finishedAt };
+}
+
+function sortRankings(rankings: Ranking[]): Ranking[] {
+  return [...rankings]
+    .sort((a, b) => b.score - a.score || b.clearedLevels - a.clearedLevels || a.finishedAt.localeCompare(b.finishedAt))
+    .slice(0, 30);
+}
+
 function readSave(): SaveData | null {
   try {
     const raw = window.localStorage.getItem(SAVE_KEY);
-    if (!raw) return null;
-    const data = JSON.parse(raw) as Record<string, unknown>;
-    if (
-      typeof data.playerName !== "string" ||
-      typeof data.level !== "number" || typeof data.clearedLevels !== "number" ||
-      typeof data.time !== "number" || typeof data.score !== "number"
-    ) return null;
-    return {
-      version: 2,
-      playerName: data.playerName,
-      difficulty: isDifficultyId(data.difficulty) ? data.difficulty : "expert",
-      level: data.level,
-      clearedLevels: data.clearedLevels,
-      time: data.time,
-      score: data.score,
-      savedAt: typeof data.savedAt === "string" ? data.savedAt : new Date(0).toISOString(),
-    };
+    return raw ? normalizeSave(JSON.parse(raw)) : null;
   } catch {
     return null;
   }
@@ -426,21 +462,10 @@ function readRankings(): Ranking[] {
     if (!raw) return [];
     const data = JSON.parse(raw);
     if (!Array.isArray(data)) return [];
-    return data.flatMap((entry): Ranking[] => {
-      if (!entry || typeof entry.playerName !== "string" || typeof entry.score !== "number" ||
-        typeof entry.clearedLevels !== "number" || typeof entry.finishedAt !== "string") return [];
-      return [{
-        version: 2,
-        playerName: entry.playerName,
-        difficulty: isDifficultyId(entry.difficulty) ? entry.difficulty : "expert",
-        level: typeof entry.level === "number" ? entry.level : entry.clearedLevels + 1,
-        clearedLevels: entry.clearedLevels,
-        time: typeof entry.time === "number" ? entry.time : 0,
-        score: entry.score,
-        savedAt: typeof entry.savedAt === "string" ? entry.savedAt : entry.finishedAt,
-        finishedAt: entry.finishedAt,
-      }];
-    }).slice(0, 30);
+    return sortRankings(data.flatMap((entry): Ranking[] => {
+      const normalized = normalizeRanking(entry);
+      return normalized ? [normalized] : [];
+    }));
   } catch {
     return [];
   }
@@ -455,12 +480,34 @@ function writeSave(save: SaveData): boolean {
   }
 }
 
+function writeImportedRecord(progress: SaveData | null, rankings: Ranking[]): boolean {
+  let previousSave: string | null = null;
+  let previousRankings: string | null = null;
+  try {
+    previousSave = window.localStorage.getItem(SAVE_KEY);
+    previousRankings = window.localStorage.getItem(RANKING_KEY);
+    if (progress) window.localStorage.setItem(SAVE_KEY, JSON.stringify(progress));
+    else window.localStorage.removeItem(SAVE_KEY);
+    window.localStorage.setItem(RANKING_KEY, JSON.stringify(rankings));
+    return true;
+  } catch {
+    try {
+      if (previousSave === null) window.localStorage.removeItem(SAVE_KEY);
+      else window.localStorage.setItem(SAVE_KEY, previousSave);
+      if (previousRankings === null) window.localStorage.removeItem(RANKING_KEY);
+      else window.localStorage.setItem(RANKING_KEY, previousRankings);
+    } catch { /* 儲存空間完全不可用時維持遊戲可操作 */ }
+    return false;
+  }
+}
+
 export default function Home() {
   const [screen, setScreen] = useState<Screen>("menu");
   const [playerName, setPlayerName] = useState("玩家");
   const [savedProgress, setSavedProgress] = useState<SaveData | null>(null);
   const [rankings, setRankings] = useState<Ranking[]>([]);
   const [storageReady, setStorageReady] = useState(false);
+  const [recordNotice, setRecordNotice] = useState<RecordNotice | null>(null);
   const [difficulty, setDifficulty] = useState<DifficultyId>(DEFAULT_DIFFICULTY);
   const [level, setLevel] = useState(1);
   const [time, setTime] = useState(START_TIME);
@@ -479,6 +526,7 @@ export default function Home() {
   const ghostTokenRef = useRef(0);
   const animationTokenRef = useRef(0);
   const rankingRecordedRef = useRef(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const difficultyConfig = useMemo(() => difficultyById(difficulty), [difficulty]);
   const { rows, cols, multiplier } = difficultyConfig;
@@ -571,6 +619,75 @@ export default function Home() {
     setRankings(readRankings());
     setScreen("menu");
   }, []);
+
+  const exportGameRecord = useCallback(() => {
+    const progress = readSave();
+    const storedRankings = readRankings();
+    const record: GameRecordFile = {
+      format: RECORD_FORMAT,
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      progress,
+      rankings: storedRankings,
+    };
+    const blob = new Blob([JSON.stringify(record, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `四川鬼面局-遊戲紀錄-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    setRecordNotice({
+      tone: "success",
+      text: `已匯出${progress ? "進度" : "無進度"}與 ${storedRankings.length} 筆排行榜紀錄`,
+    });
+  }, []);
+
+  const importGameRecord = useCallback(async (file?: File) => {
+    if (!file) return;
+    try {
+      if (file.size > 1024 * 1024) throw new Error("檔案超過 1 MB，並非有效的遊戲紀錄");
+      const parsed = JSON.parse(await file.text()) as Record<string, unknown>;
+      if (parsed.format !== RECORD_FORMAT || parsed.version !== 1 || !Array.isArray(parsed.rankings)) {
+        throw new Error("檔案格式不符，請選擇本遊戲匯出的 JSON 紀錄");
+      }
+      const progress = parsed.progress === null ? null : normalizeSave(parsed.progress);
+      if (parsed.progress !== null && !progress) throw new Error("進度資料不完整或已損壞");
+      const normalizedRankings = parsed.rankings.map(normalizeRanking);
+      if (normalizedRankings.some((entry) => entry === null)) throw new Error("排行榜資料不完整或已損壞");
+      const importedRankings = sortRankings(normalizedRankings as Ranking[]);
+      if (!writeImportedRecord(progress, importedRankings)) throw new Error("瀏覽器無法寫入本機儲存空間");
+
+      setSavedProgress(progress);
+      setRankings(importedRankings);
+      if (progress) {
+        setPlayerName(progress.playerName);
+        setDifficulty(progress.difficulty);
+      }
+      setRecordNotice({
+        tone: "success",
+        text: `匯入完成：${progress ? `第 ${progress.level} 關進度` : "無進度"}、${importedRankings.length} 筆排行榜紀錄`,
+      });
+    } catch (error) {
+      setRecordNotice({ tone: "error", text: error instanceof Error ? error.message : "無法讀取這份遊戲紀錄" });
+    }
+  }, []);
+
+  const finishCurrentGame = useCallback(() => {
+    if (screen !== "game" || phase === "over") return;
+    ghostTokenRef.current += 1;
+    animationTokenRef.current += 1;
+    setGhostDraw(null);
+    setMatchEffect(null);
+    setClearingIndexes([]);
+    setSelected(null);
+    setMessage("本局已結算：剩餘秒數不計入分數");
+    try { window.localStorage.removeItem(SAVE_KEY); } catch { /* 儲存停用時仍可正常結算 */ }
+    setSavedProgress(null);
+    setPhase("over");
+  }, [phase, screen]);
 
   useEffect(() => {
     if (screen !== "game" || phase !== "playing") return;
@@ -832,9 +949,7 @@ export default function Home() {
       savedAt: now,
       finishedAt: now,
     };
-    const next = [entry, ...readRankings()]
-      .sort((a, b) => b.score - a.score || b.clearedLevels - a.clearedLevels || a.finishedAt.localeCompare(b.finishedAt))
-      .slice(0, 30);
+    const next = sortRankings([entry, ...readRankings()]);
     try { window.localStorage.setItem(RANKING_KEY, JSON.stringify(next)); } catch { /* 瀏覽器停用儲存時仍可遊玩 */ }
     setRankings(next);
   }, [difficulty, level, phase, playerName, score, screen, time]);
@@ -896,6 +1011,31 @@ export default function Home() {
                 <button onClick={() => setScreen("leaderboard")}><b>排行榜</b><small>查看此瀏覽器的最佳牌局</small></button>
                 <button onClick={() => setScreen("exit")}><b>結束遊戲</b><small>離開牌桌</small></button>
               </nav>
+              <section className="record-transfer" aria-label="遊戲紀錄備份">
+                <div>
+                  <button
+                    type="button"
+                    onClick={exportGameRecord}
+                    disabled={!storageReady || (!savedProgress && rankings.length === 0)}
+                  >匯出遊戲紀錄</button>
+                  <button type="button" onClick={() => importInputRef.current?.click()}>匯入遊戲紀錄</button>
+                  <input
+                    ref={importInputRef}
+                    className="record-file-input"
+                    type="file"
+                    accept=".json,application/json"
+                    aria-label="選擇要匯入的遊戲紀錄"
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0];
+                      event.currentTarget.value = "";
+                      void importGameRecord(file);
+                    }}
+                  />
+                </div>
+                <p className={recordNotice ? recordNotice.tone : ""} aria-live="polite">
+                  {recordNotice?.text ?? "備份檔同時包含關卡進度與排行榜，匯入時會取代本機紀錄。"}
+                </p>
+              </section>
               <a className="offline-download" href="./downloads/sichuan-ghost-mahjong-offline.zip" download>
                 <span>↓</span><b>下載離線版</b><small>解壓縮後雙擊 index.html</small>
               </a>
@@ -948,6 +1088,7 @@ export default function Home() {
         </div>
         <div className="header-actions">
           <button className="text-button" onClick={() => setShowRules(true)}>玩法說明</button>
+          <button className="text-button settle-button" onClick={finishCurrentGame}>結算本局</button>
           <button className="text-button" onClick={returnToMenu}>主選單</button>
         </div>
       </header>
