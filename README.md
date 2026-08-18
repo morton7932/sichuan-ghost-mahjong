@@ -1,0 +1,1 @@
+# sichuan-ghost-mahjong
