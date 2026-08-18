@@ -51,3 +51,17 @@ test("includes the cockatoo one-bamboo pair and excludes flower tiles", async ()
   assert.equal(tileFiles.some((name) => /^Flower-/i.test(name)), false);
   await access(new URL("../public/art/mahjong-tile-base-v2.png", import.meta.url));
 });
+
+test("uses the familiar seven-dot layout and clear segmented bamboo", async () => {
+  const [sevenDots, sevenBamboo] = await Promise.all([
+    readFile(new URL("../public/tiles/Pin7.svg", import.meta.url), "utf8"),
+    readFile(new URL("../public/tiles/Sou7.svg", import.meta.url), "utf8"),
+  ]);
+
+  assert.equal((sevenDots.match(/<circle r="15"/g) ?? []).length, 7);
+  assert.match(sevenDots, /translate\(48 48\)/);
+  assert.match(sevenDots, /translate\(80 79\)/);
+  assert.match(sevenDots, /translate\(112 110\)/);
+  assert.equal((sevenBamboo.match(/M-9-20Q0-24 9-20/g) ?? []).length, 7);
+  assert.doesNotMatch(sevenBamboo, /<rect x="-7"/);
+});

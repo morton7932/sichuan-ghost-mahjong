@@ -1,4 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 220">
   <defs><filter id="soft"><feDropShadow dx="0" dy="1.5" stdDeviation=".8" flood-color="#5b3b1c" flood-opacity=".28"/></filter></defs>
-  <g filter="url(#soft)"><g font-family="Arial,Noto Sans TC,sans-serif" font-weight="800" fill="#08704f"><text x="17" y="28" font-size="19">4</text><text x="17" y="45" font-size="13">索</text></g><g transform="translate(57 76) scale(1)"><rect x="-7" y="-21" width="14" height="42" rx="7" fill="#b52227"/><path d="M-5-7H5M-5 7H5" stroke="#f7edcf" stroke-width="3"/><circle r="3" fill="#e9bf55"/></g><g transform="translate(103 76) scale(1)"><rect x="-7" y="-21" width="14" height="42" rx="7" fill="#08704f"/><path d="M-5-7H5M-5 7H5" stroke="#f7edcf" stroke-width="3"/><circle r="3" fill="#e9bf55"/></g><g transform="translate(57 151) scale(1)"><rect x="-7" y="-21" width="14" height="42" rx="7" fill="#15568a"/><path d="M-5-7H5M-5 7H5" stroke="#f7edcf" stroke-width="3"/><circle r="3" fill="#e9bf55"/></g><g transform="translate(103 151) scale(1)"><rect x="-7" y="-21" width="14" height="42" rx="7" fill="#08704f"/><path d="M-5-7H5M-5 7H5" stroke="#f7edcf" stroke-width="3"/><circle r="3" fill="#e9bf55"/></g></g>
+  <g filter="url(#soft)"><g font-family="Arial,Noto Sans TC,sans-serif" font-weight="800" fill="#08704f"><text x="17" y="28" font-size="19">4</text><text x="17" y="45" font-size="13">索</text></g><g transform="translate(56 77) scale(1)" stroke="#172d29" stroke-width="1.4" stroke-linejoin="round">
+    <path d="M-9-20Q0-24 9-20L7-8Q0-4-7-8Z" fill="#08704f"/>
+    <path d="M-8-5Q0-9 8-5L8 6Q0 10-8 6Z" fill="#08704f"/>
+    <path d="M-7 9Q0 5 7 9L9 20Q0 24-9 20Z" fill="#08704f"/>
+    <path d="M-4-17L4-19M-3-2L4-4M-3 13L4 11" stroke="#f7edcf" stroke-width="2" stroke-linecap="round" opacity=".82"/>
+  </g><g transform="translate(104 77) scale(1)" stroke="#172d29" stroke-width="1.4" stroke-linejoin="round">
+    <path d="M-9-20Q0-24 9-20L7-8Q0-4-7-8Z" fill="#15568a"/>
+    <path d="M-8-5Q0-9 8-5L8 6Q0 10-8 6Z" fill="#15568a"/>
+    <path d="M-7 9Q0 5 7 9L9 20Q0 24-9 20Z" fill="#15568a"/>
+    <path d="M-4-17L4-19M-3-2L4-4M-3 13L4 11" stroke="#f7edcf" stroke-width="2" stroke-linecap="round" opacity=".82"/>
+  </g><g transform="translate(56 149) scale(1)" stroke="#172d29" stroke-width="1.4" stroke-linejoin="round">
+    <path d="M-9-20Q0-24 9-20L7-8Q0-4-7-8Z" fill="#08704f"/>
+    <path d="M-8-5Q0-9 8-5L8 6Q0 10-8 6Z" fill="#08704f"/>
+    <path d="M-7 9Q0 5 7 9L9 20Q0 24-9 20Z" fill="#08704f"/>
+    <path d="M-4-17L4-19M-3-2L4-4M-3 13L4 11" stroke="#f7edcf" stroke-width="2" stroke-linecap="round" opacity=".82"/>
+  </g><g transform="translate(104 149) scale(1)" stroke="#172d29" stroke-width="1.4" stroke-linejoin="round">
+    <path d="M-9-20Q0-24 9-20L7-8Q0-4-7-8Z" fill="#15568a"/>
+    <path d="M-8-5Q0-9 8-5L8 6Q0 10-8 6Z" fill="#15568a"/>
+    <path d="M-7 9Q0 5 7 9L9 20Q0 24-9 20Z" fill="#15568a"/>
+    <path d="M-4-17L4-19M-3-2L4-4M-3 13L4 11" stroke="#f7edcf" stroke-width="2" stroke-linecap="round" opacity=".82"/>
+  </g></g>
 </svg>

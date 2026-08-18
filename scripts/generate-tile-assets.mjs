@@ -19,31 +19,48 @@ const pipLayouts = {
   4: [[51, 67], [109, 67], [51, 157], [109, 157]],
   5: [[51, 61], [109, 61], [80, 112], [51, 163], [109, 163]],
   6: [[51, 57], [109, 57], [51, 112], [109, 112], [51, 167], [109, 167]],
-  7: [[51, 54], [109, 54], [80, 86], [51, 120], [109, 120], [51, 168], [109, 168]],
+  7: [[48, 48], [80, 79], [112, 110], [51, 145], [109, 145], [51, 181], [109, 181]],
   8: [[51, 49], [109, 49], [51, 91], [109, 91], [51, 133], [109, 133], [51, 175], [109, 175]],
   9: [[47, 54], [80, 54], [113, 54], [47, 112], [80, 112], [113, 112], [47, 170], [80, 170], [113, 170]],
 };
 
 const pip = ([x, y, scale = 1], index, total) => {
-  const accent = total === 1 ? colors.red : index % 3 === 0 ? colors.red : index % 3 === 1 ? colors.blue : colors.green;
+  const accent = total === 1
+    ? colors.red
+    : total === 7
+      ? index < 3 ? colors.blue : colors.red
+      : index % 3 === 0 ? colors.red : index % 3 === 1 ? colors.blue : colors.green;
   return `<g transform="translate(${x} ${y}) scale(${scale})"><circle r="15" fill="${colors.ivory}" stroke="${colors.blue}" stroke-width="4"/><circle r="9" fill="none" stroke="${accent}" stroke-width="4"/><circle r="3.5" fill="${accent}"/></g>`;
 };
 
 const bambooLayouts = {
   1: [[80, 111, 1.45]],
-  2: [[57, 82], [103, 142]],
-  3: [[53, 73], [80, 114], [107, 155]],
-  4: [[57, 76], [103, 76], [57, 151], [103, 151]],
-  5: [[56, 69], [104, 69], [80, 112], [56, 158], [104, 158]],
-  6: [[56, 61], [104, 61], [56, 113], [104, 113], [56, 165], [104, 165]],
-  7: [[55, 55], [105, 55], [80, 86], [55, 121], [105, 121], [55, 169], [105, 169]],
-  8: [[56, 49], [104, 49], [56, 91], [104, 91], [56, 133], [104, 133], [56, 175], [104, 175]],
-  9: [[48, 54], [80, 54], [112, 54], [48, 112], [80, 112], [112, 112], [48, 170], [80, 170], [112, 170]],
+  2: [[57, 111], [103, 111]],
+  3: [[52, 67], [80, 112], [108, 157]],
+  4: [[56, 77], [104, 77], [56, 149], [104, 149]],
+  5: [[54, 68], [106, 68], [80, 112], [54, 160], [106, 160]],
+  6: [[55, 58], [105, 58], [55, 112], [105, 112], [55, 166], [105, 166]],
+  7: [[49, 49], [80, 79], [111, 109], [55, 145], [105, 145], [55, 181], [105, 181]],
+  8: [[55, 47], [105, 47], [55, 91], [105, 91], [55, 135], [105, 135], [55, 179], [105, 179]],
+  9: [[46, 55], [80, 55], [114, 55], [46, 112], [80, 112], [114, 112], [46, 169], [80, 169], [114, 169]],
 };
 
-const bamboo = ([x, y, scale = 1], index) => {
-  const body = index % 4 === 0 ? colors.red : index % 4 === 2 ? colors.blue : colors.green;
-  return `<g transform="translate(${x} ${y}) scale(${scale})"><rect x="-7" y="-21" width="14" height="42" rx="7" fill="${body}"/><path d="M-5-7H5M-5 7H5" stroke="${colors.ivory}" stroke-width="3"/><circle r="3" fill="#e9bf55"/></g>`;
+const bambooColor = (total, index) => {
+  if (total === 3) return [colors.blue, colors.red, colors.green][index];
+  if (total === 5 && index === 2) return colors.red;
+  if (total === 7 && index === 1) return colors.red;
+  if (total === 9) return [colors.blue, colors.green, colors.red][Math.floor(index / 3)];
+  return index % 2 === 0 ? colors.green : colors.blue;
+};
+
+const bamboo = ([x, y, scale = 1], index, total) => {
+  const body = bambooColor(total, index);
+  return `<g transform="translate(${x} ${y}) scale(${scale})" stroke="${colors.ink}" stroke-width="1.4" stroke-linejoin="round">
+    <path d="M-9-20Q0-24 9-20L7-8Q0-4-7-8Z" fill="${body}"/>
+    <path d="M-8-5Q0-9 8-5L8 6Q0 10-8 6Z" fill="${body}"/>
+    <path d="M-7 9Q0 5 7 9L9 20Q0 24-9 20Z" fill="${body}"/>
+    <path d="M-4-17L4-19M-3-2L4-4M-3 13L4 11" stroke="${colors.ivory}" stroke-width="2" stroke-linecap="round" opacity=".82"/>
+  </g>`;
 };
 
 for (let n = 1; n <= 9; n += 1) {
@@ -53,7 +70,7 @@ for (let n = 1; n <= 9; n += 1) {
   const pips = pipLayouts[n].map((entry, index) => pip(entry, index, n)).join("");
   await writeFile(join(out, `Pin${n}.svg`), svg(`${label(n, "筒", colors.blue)}${pips}`));
 
-  const sticks = bambooLayouts[n].map((entry, index) => bamboo(entry, index)).join("");
+  const sticks = bambooLayouts[n].map((entry, index) => bamboo(entry, index, n)).join("");
   await writeFile(join(out, `Sou${n}.svg`), svg(`${label(n, "索", colors.green)}${sticks}`));
 }
 
