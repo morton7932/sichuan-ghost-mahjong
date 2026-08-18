@@ -41,7 +41,8 @@ const bambooLayouts = {
   5: [[54, 68], [106, 68], [80, 112], [54, 160], [106, 160]],
   6: [[55, 58], [105, 58], [55, 112], [105, 112], [55, 166], [105, 166]],
   7: [[49, 49], [80, 79], [111, 109], [55, 145], [105, 145], [55, 181], [105, 181]],
-  8: [[55, 47], [105, 47], [55, 91], [105, 91], [55, 135], [105, 135], [55, 179], [105, 179]],
+  // 八索採傳統上下對稱的交叉式排列，外側直立、內側斜向相接。
+  8: [[46, 68], [72, 89, 1, 45], [88, 89, 1, -45], [114, 68], [46, 157], [72, 136, 1, -45], [88, 136, 1, 45], [114, 157]],
   9: [[46, 55], [80, 55], [114, 55], [46, 112], [80, 112], [114, 112], [46, 169], [80, 169], [114, 169]],
 };
 
@@ -49,13 +50,15 @@ const bambooColor = (total, index) => {
   if (total === 3) return [colors.blue, colors.red, colors.green][index];
   if (total === 5 && index === 2) return colors.red;
   if (total === 7 && index === 1) return colors.red;
+  if (total === 8) return [0, 3, 4, 7].includes(index) ? colors.green : colors.blue;
   if (total === 9) return [colors.blue, colors.green, colors.red][Math.floor(index / 3)];
   return index % 2 === 0 ? colors.green : colors.blue;
 };
 
-const bamboo = ([x, y, scale = 1], index, total) => {
+const bamboo = ([x, y, scale = 1, rotation = 0], index, total) => {
   const body = bambooColor(total, index);
-  return `<g transform="translate(${x} ${y}) scale(${scale})" stroke="${colors.ink}" stroke-width="1.4" stroke-linejoin="round">
+  const rotationTransform = rotation ? ` rotate(${rotation})` : "";
+  return `<g transform="translate(${x} ${y})${rotationTransform} scale(${scale})" stroke="${colors.ink}" stroke-width="1.4" stroke-linejoin="round">
     <path d="M-9-20Q0-24 9-20L7-8Q0-4-7-8Z" fill="${body}"/>
     <path d="M-8-5Q0-9 8-5L8 6Q0 10-8 6Z" fill="${body}"/>
     <path d="M-7 9Q0 5 7 9L9 20Q0 24-9 20Z" fill="${body}"/>

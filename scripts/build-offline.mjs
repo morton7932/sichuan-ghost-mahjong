@@ -70,5 +70,5 @@ await writeFile(join(releaseRoot, "index.html"), html);
 await writeFile(join(releaseRoot, ".nojekyll"), "");
 await cp(join(project, "public", "tiles"), join(releaseRoot, "tiles"), { recursive: true });
 await cp(join(project, "public", "art"), join(releaseRoot, "art"), { recursive: true });
-await writeFile(join(releaseRoot, "使用說明.txt"), "四川・鬼面局 離線版\r\n\r\n1. 解壓縮整個資料夾。\r\n2. 雙擊 index.html 即可遊玩。\r\n3. 存檔與排行榜只保存在開啟遊戲的瀏覽器 localStorage。\r\n4. 請保留 tiles 與 art 資料夾在 index.html 旁邊。\r\n", "utf8");
+await writeFile(join(releaseRoot, "使用說明.txt"), "四川・鬼面局 離線版\r\n\r\n1. 解壓縮整個資料夾。\r\n2. 雙擊 index.html 即可遊玩。\r\n3. 存檔與排行榜只保存在開啟遊戲的瀏覽器 localStorage。\r\n4. 可在主選單匯出或匯入包含進度與排行榜的 JSON 備份檔。\r\n5. 請保留 tiles 與 art 資料夾在 index.html 旁邊。\r\n", "utf8");
 console.log(`Offline release created at ${releaseRoot}`);

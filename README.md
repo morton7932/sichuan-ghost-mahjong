@@ -28,4 +28,4 @@ pnpm build
 pnpm package:release
 ```
 
-遊戲進度與排行榜只使用瀏覽器 `localStorage`，不會上傳到伺服器。
+遊戲進度與排行榜只使用瀏覽器 `localStorage`，不會上傳到伺服器。主選單可將兩者一起匯出為 JSON 備份檔，並在其他瀏覽器或裝置匯入。

@@ -53,9 +53,10 @@ test("includes the cockatoo one-bamboo pair and excludes flower tiles", async ()
 });
 
 test("uses the familiar seven-dot layout and clear segmented bamboo", async () => {
-  const [sevenDots, sevenBamboo] = await Promise.all([
+  const [sevenDots, sevenBamboo, eightBamboo] = await Promise.all([
     readFile(new URL("../public/tiles/Pin7.svg", import.meta.url), "utf8"),
     readFile(new URL("../public/tiles/Sou7.svg", import.meta.url), "utf8"),
+    readFile(new URL("../public/tiles/Sou8.svg", import.meta.url), "utf8"),
   ]);
 
   assert.equal((sevenDots.match(/<circle r="15"/g) ?? []).length, 7);
@@ -64,6 +65,9 @@ test("uses the familiar seven-dot layout and clear segmented bamboo", async () =
   assert.match(sevenDots, /translate\(112 110\)/);
   assert.equal((sevenBamboo.match(/M-9-20Q0-24 9-20/g) ?? []).length, 7);
   assert.doesNotMatch(sevenBamboo, /<rect x="-7"/);
+  assert.equal((eightBamboo.match(/M-9-20Q0-24 9-20/g) ?? []).length, 8);
+  assert.match(eightBamboo, /rotate\(45\)/);
+  assert.match(eightBamboo, /rotate\(-45\)/);
 });
 
 test("offers scored board-size difficulties and lightweight match effects", async () => {
@@ -72,9 +76,9 @@ test("offers scored board-size difficulties and lightweight match effects", asyn
     readFile(cssUrl, "utf8"),
   ]);
 
-  assert.match(source, /id: "beginner"[\s\S]*rows: 6, cols: 8[\s\S]*multiplier: 1/);
-  assert.match(source, /id: "standard"[\s\S]*rows: 8, cols: 10[\s\S]*multiplier: 1\.25/);
-  assert.match(source, /id: "expert"[\s\S]*rows: 8, cols: 12[\s\S]*multiplier: 1\.5/);
+  assert.match(source, /id: "beginner"[\s\S]*rows: 8, cols: 10[\s\S]*multiplier: 1/);
+  assert.match(source, /id: "standard"[\s\S]*rows: 8, cols: 12[\s\S]*multiplier: 1\.35/);
+  assert.match(source, /id: "expert"[\s\S]*rows: 10, cols: 14[\s\S]*multiplier: 1\.75/);
   assert.match(source, /difficulty: DifficultyId/);
   assert.match(source, /className="match-path-core"/);
   assert.match(source, /findTwoTurnPath/);
@@ -82,4 +86,21 @@ test("offers scored board-size difficulties and lightweight match effects", asyn
   assert.match(css, /@keyframes tile-match/);
   assert.match(css, /@keyframes path-draw/);
   assert.match(css, /prefers-reduced-motion/);
+});
+
+test("backs up progress and rankings and supports immediate score settlement", async () => {
+  const [source, css] = await Promise.all([
+    readFile(pageUrl, "utf8"),
+    readFile(cssUrl, "utf8"),
+  ]);
+
+  assert.match(source, /format: "sichuan-ghost-mahjong-record"/);
+  assert.match(source, /progress: SaveData \| null/);
+  assert.match(source, /rankings: Ranking\[\]/);
+  assert.match(source, /匯出遊戲紀錄/);
+  assert.match(source, /匯入遊戲紀錄/);
+  assert.match(source, /本局已結算：剩餘秒數不計入分數/);
+  assert.match(source, /className="text-button settle-button"/);
+  assert.match(css, /\.record-transfer/);
+  assert.match(css, /\.settle-button/);
 });
