@@ -14,6 +14,7 @@ test("builds a self-contained playable release", async () => {
   assert.match(html, /offline-download/);
   assert.match(html, /sichuan-ghost-mahjong-offline\.zip/);
   assert.match(html, /cockatoo-sou1\.png/);
+  assert.match(html, /mahjong-tile-base-v2\.png/);
   assert.match(html, /ghost-mask\.png/);
   assert.match(html, /\.suo-1 \.tile-art/);
 
@@ -43,6 +44,8 @@ test("includes the cockatoo one-bamboo pair and excludes flower tiles", async ()
   assert.match(source, /tile\.kind === "suo-1"/);
   assert.match(css, /\.suo-1 \.tile-art/);
   assert.match(css, /background-color:\s*#0d5543/);
+  assert.match(css, /mahjong-tile-base-v2\.png/);
   assert.equal(tileFiles.filter((name) => name.endsWith(".svg")).length, 34);
   assert.equal(tileFiles.some((name) => /^Flower-/i.test(name)), false);
+  await access(new URL("../public/art/mahjong-tile-base-v2.png", import.meta.url));
 });
