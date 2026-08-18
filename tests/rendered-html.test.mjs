@@ -76,9 +76,9 @@ test("offers scored board-size difficulties and lightweight match effects", asyn
     readFile(cssUrl, "utf8"),
   ]);
 
-  assert.match(source, /id: "beginner"[\s\S]*rows: 6, cols: 8[\s\S]*multiplier: 1/);
-  assert.match(source, /id: "standard"[\s\S]*rows: 8, cols: 10[\s\S]*multiplier: 1\.25/);
-  assert.match(source, /id: "expert"[\s\S]*rows: 8, cols: 12[\s\S]*multiplier: 1\.5/);
+  assert.match(source, /id: "beginner"[\s\S]*rows: 8, cols: 10[\s\S]*multiplier: 1/);
+  assert.match(source, /id: "standard"[\s\S]*rows: 8, cols: 12[\s\S]*multiplier: 1\.35/);
+  assert.match(source, /id: "expert"[\s\S]*rows: 10, cols: 14[\s\S]*multiplier: 1\.75/);
   assert.match(source, /difficulty: DifficultyId/);
   assert.match(source, /className="match-path-core"/);
   assert.match(source, /findTwoTurnPath/);

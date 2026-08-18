@@ -15,9 +15,9 @@ type Difficulty = {
 };
 
 const DIFFICULTIES: Difficulty[] = [
-  { id: "beginner", label: "入門", rows: 6, cols: 8, multiplier: 1, detail: "牌少、路線較寬" },
-  { id: "standard", label: "標準", rows: 8, cols: 10, multiplier: 1.25, detail: "均衡的牌局節奏" },
-  { id: "expert", label: "挑戰", rows: 8, cols: 12, multiplier: 1.5, detail: "牌多、得分最高" },
+  { id: "beginner", label: "入門", rows: 8, cols: 10, multiplier: 1, detail: "較寬鬆的完整牌桌" },
+  { id: "standard", label: "標準", rows: 8, cols: 12, multiplier: 1.35, detail: "牌量增加、路線更密" },
+  { id: "expert", label: "挑戰", rows: 10, cols: 14, multiplier: 1.75, detail: "桌機向的大型牌局" },
 ];
 const DEFAULT_DIFFICULTY: DifficultyId = "standard";
 
