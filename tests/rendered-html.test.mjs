@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { access, readFile, readdir } from "node:fs/promises";
 import test from "node:test";
+import ts from "typescript";
 
 const pageUrl = new URL("../app/page.tsx", import.meta.url);
 const cssUrl = new URL("../app/globals.css", import.meta.url);
@@ -55,6 +56,45 @@ test("moves directional ghost effects without reshuffling the tiles", async () =
   assert.match(ghostEffects, /effect === "angry"[\s\S]*buildBoard/);
   assert.match(ghostEffects, /effect === "horizontal"[\s\S]*splitRemaining/);
   assert.match(ghostEffects, /effect === "vertical"[\s\S]*splitRemaining/);
+});
+
+test("moves inward and outward effects to radial slots without changing the tiles", async () => {
+  const source = await readFile(pageUrl, "utf8");
+  const slotSource = source.slice(
+    source.indexOf("function innerBoardSlots"),
+    source.indexOf("function initialBoardSlots"),
+  );
+  const movementSource = source.slice(
+    source.indexOf("function distanceFromCenter"),
+    source.indexOf("function splitRemaining"),
+  );
+  const executable = ts.transpileModule(
+    `const BOARD_MARGIN = 1; type Tile = { uid: string }; ${slotSource}\n${movementSource}`,
+    { compilerOptions: { target: ts.ScriptTarget.ES2022 } },
+  ).outputText;
+  const moveTilesToward = Function(`${executable}\nreturn moveTilesToward;`)();
+  const rows = 9;
+  const cols = 11;
+  const board = Array(rows * cols).fill(null);
+  const sources = [12, 16, 20, 35, 41, 56, 63, 74, 84, 86];
+  sources.forEach((index, uid) => { board[index] = { uid: String(uid) }; });
+  const distance = (index) => Math.abs(Math.floor(index / cols) - (rows - 1) / 2) + Math.abs(index % cols - (cols - 1) / 2);
+  const innerSlots = Array.from({ length: rows * cols }, (_, index) => index).filter((index) => {
+    const row = Math.floor(index / cols);
+    const col = index % cols;
+    return row >= 1 && row < rows - 1 && col >= 1 && col < cols - 1;
+  });
+  const occupied = (next) => next.flatMap((tile, index) => tile ? [index] : []);
+  const identities = (next) => next.filter(Boolean).map((tile) => tile.uid).sort();
+  const expectedIn = [...innerSlots].sort((a, b) => distance(a) - distance(b) || a - b).slice(0, sources.length).sort((a, b) => a - b);
+  const expectedOut = [...innerSlots].sort((a, b) => distance(b) - distance(a) || a - b).slice(0, sources.length).sort((a, b) => a - b);
+
+  const inward = moveTilesToward(board, "in", rows, cols);
+  const outward = moveTilesToward(board, "out", rows, cols);
+  assert.deepEqual(occupied(inward), expectedIn);
+  assert.deepEqual(occupied(outward), expectedOut);
+  assert.deepEqual(identities(inward), identities(board));
+  assert.deepEqual(identities(outward), identities(board));
 });
 
 test("includes the cockatoo one-bamboo pair and excludes flower tiles", async () => {
@@ -120,8 +160,8 @@ test("offers scored board-size difficulties and lightweight match effects", asyn
   assert.match(source, /id: "expert"[\s\S]*rows: 10, cols: 14[\s\S]*multiplier: 1\.75/);
   assert.match(source, /difficulty: DifficultyId/);
   assert.match(source, /className="match-path-core"/);
-  assert.match(source, /findTwoTurnPath\(visualBoard, visualIndexes\[0\], visualIndexes\[1\], visualRows, visualCols\)/);
-  assert.match(source, /const GAME_VERSION = "1\.1\.3"/);
+  assert.match(source, /const path = findMatchPath\(board, selected, index, boardRows, boardCols\)/);
+  assert.match(source, /const GAME_VERSION = "1\.1\.4"/);
   assert.match(source, /className="menu-version">版本 v\{GAME_VERSION\}/);
   assert.match(source, /className="menu-seal" role="img" aria-label="一索鸚鵡"/);
   assert.match(css, /\.tile\.selected::after/);
@@ -162,15 +202,16 @@ test("backs up progress and rankings and supports immediate score settlement", a
   assert.match(css, /\.data-tools-card/);
   assert.match(source, /occupiedBoardOffset/);
   assert.match(source, /compactBoard/);
-  assert.match(source, /compactOrder/);
-  assert.match(source, /Array\.from\(\{ length: rows \* cols \}/);
-  assert.match(source, /const visualRows = compactBoard \? rows : boardRows/);
-  assert.match(source, /Array\.from\(\{ length: visualRows \* visualCols \}/);
+  assert.doesNotMatch(source, /compactOrder/);
+  assert.match(source, /const compactCols = boardCols - BOARD_MARGIN \* 2/);
+  assert.match(source, /row < boardRows - BOARD_MARGIN/);
+  assert.match(source, /col < boardCols - BOARD_MARGIN/);
+  assert.match(source, /const visualRows = compactBoard \? boardRows - BOARD_MARGIN \* 2 : boardRows/);
   assert.match(source, /compactBoard \? <button type="button" className="tile tile-placeholder" disabled/);
   assert.match(css, /\.tile-placeholder \{[^}]*visibility: hidden/);
   assert.match(source, /remaining >= previousRemainingRef\.current/);
-  assert.match(source, /if \(matchEffect\.diagonal\) return endpoints/);
-  assert.match(source, /findTwoTurnPath\(visualBoard, visualIndexes\[0\], visualIndexes\[1\], visualRows, visualCols\)/);
+  assert.match(source, /point\.row - BOARD_MARGIN/);
+  assert.match(source, /point\.col - BOARD_MARGIN/);
   assert.match(source, /matchMedia\("\(max-width: 620px\)"\)/);
   assert.match(css, /translate: var\(--cell-offset-x,0\) var\(--cell-offset-y,0\)/);
   assert.match(css, /\.tile-suo:not\(\.suo-1\) \.tile-art/);
