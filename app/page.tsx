@@ -6,7 +6,7 @@ const START_TIME = 240;
 const BOARD_MARGIN = 1;
 const GHOST_GAP = 1;
 
-type DifficultyId = "beginner" | "standard" | "expert";
+type DifficultyId = "casual" | "beginner" | "standard" | "expert";
 type Difficulty = {
   id: DifficultyId;
   label: string;
@@ -17,6 +17,7 @@ type Difficulty = {
 };
 
 const DIFFICULTIES: Difficulty[] = [
+  { id: "casual", label: "輕鬆", rows: 6, cols: 8, multiplier: 0.8, detail: "最初版本的小型牌桌" },
   { id: "beginner", label: "入門", rows: 8, cols: 10, multiplier: 1, detail: "較寬鬆的完整牌桌" },
   { id: "standard", label: "標準", rows: 8, cols: 12, multiplier: 1.35, detail: "牌量增加、路線更密" },
   { id: "expert", label: "挑戰", rows: 10, cols: 14, multiplier: 1.75, detail: "桌機向的大型牌局" },
@@ -24,7 +25,7 @@ const DIFFICULTIES: Difficulty[] = [
 const DEFAULT_DIFFICULTY: DifficultyId = "standard";
 
 function difficultyById(id: DifficultyId): Difficulty {
-  return DIFFICULTIES.find((difficulty) => difficulty.id === id) ?? DIFFICULTIES[1];
+  return DIFFICULTIES.find((difficulty) => difficulty.id === id) ?? DIFFICULTIES[2];
 }
 
 function boardDimensions(rows: number, cols: number) {
@@ -51,6 +52,19 @@ function initialBoardSlots(tileRows: number, tileCols: number): number[] {
     }
   }
   return slots;
+}
+
+function occupiedBoardOffset(board: (Tile | null)[], rows: number, cols: number): PathPoint {
+  const positions = board.flatMap((tile, index) => tile ? [index] : []);
+  if (positions.length === 0) return { row: 0, col: 0 };
+  const occupiedRows = positions.map((index) => Math.floor(index / cols));
+  const occupiedCols = positions.map((index) => index % cols);
+  const minRow = Math.min(...occupiedRows), maxRow = Math.max(...occupiedRows);
+  const minCol = Math.min(...occupiedCols), maxCol = Math.max(...occupiedCols);
+  return {
+    row: (rows - 1 - minRow - maxRow) / 2,
+    col: (cols - 1 - minCol - maxCol) / 2,
+  };
 }
 
 function isDifficultyId(value: unknown): value is DifficultyId {
@@ -566,6 +580,8 @@ export default function Home() {
   const [showRules, setShowRules] = useState(false);
   const [showNewGameSetup, setShowNewGameSetup] = useState(false);
   const [showDataTools, setShowDataTools] = useState(false);
+  const [compactBoard, setCompactBoard] = useState(false);
+  const [boardOffset, setBoardOffset] = useState<PathPoint>({ row: 0.5, col: 0.5 });
   const [levelBonus, setLevelBonus] = useState(0);
   const [ghostDraw, setGhostDraw] = useState<GhostDraw | null>(null);
   const ghostTokenRef = useRef(0);
@@ -577,9 +593,43 @@ export default function Home() {
   const { rows, cols, multiplier } = difficultyConfig;
   const { rows: boardRows, cols: boardCols } = useMemo(() => boardDimensions(rows, cols), [rows, cols]);
   const remaining = useMemo(() => board.filter(Boolean).length, [board]);
+  const visualEntries = useMemo(() => {
+    const entries = board.map((tile, index) => ({ tile, index, visualIndex: index }));
+    if (!compactBoard) return entries;
+    return entries.filter((entry) => entry.tile).map((entry, visualIndex) => ({ ...entry, visualIndex }));
+  }, [board, compactBoard]);
+  const visualCols = compactBoard ? cols : boardCols;
+  const visualRows = compactBoard ? Math.max(1, Math.ceil(remaining / visualCols)) : boardRows;
+  const displayedMatchPath = useMemo(() => {
+    if (!matchEffect) return [];
+    if (!compactBoard) {
+      return matchEffect.path.map((point) => ({ row: point.row + boardOffset.row, col: point.col + boardOffset.col }));
+    }
+    const occupiedIndexes = board.flatMap((tile, index) => tile ? [index] : []);
+    return matchEffect.indexes.map((originalIndex) => {
+      const visualIndex = occupiedIndexes.indexOf(originalIndex);
+      return { row: Math.floor(visualIndex / visualCols) + 0.5, col: visualIndex % visualCols + 0.5 };
+    });
+  }, [board, boardOffset, compactBoard, matchEffect, visualCols]);
   const progress = ((rows * cols - remaining) / (rows * cols)) * 100;
   const inputLocked = phase !== "playing" || matchEffect !== null || clearingIndexes.length > 0;
   const awardPoints = useCallback((base: number) => Math.round(base * multiplier), [multiplier]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 620px)");
+    const syncBoardMode = () => setCompactBoard(media.matches);
+    syncBoardMode();
+    media.addEventListener("change", syncBoardMode);
+    return () => media.removeEventListener("change", syncBoardMode);
+  }, []);
+
+  const previousRemainingRef = useRef(remaining);
+  useEffect(() => {
+    if (remaining >= previousRemainingRef.current) {
+      setBoardOffset(occupiedBoardOffset(board, boardRows, boardCols));
+    }
+    previousRemainingRef.current = remaining;
+  }, [board, boardCols, boardRows, remaining]);
 
   useEffect(() => {
     const hydrationTimer = window.setTimeout(() => {
@@ -1175,19 +1225,24 @@ export default function Home() {
           <div className="table-label"><span>同一條 45° 斜線即可遠距對消</span></div>
           <div className="mahjong-table">
             <div
-              className="board"
+              className={`board ${compactBoard ? "compact-board" : ""}`}
               role="grid"
               aria-label={`${difficultyConfig.label} ${rows} 乘 ${cols} 四川省麻將牌盤`}
-              style={{ "--board-cols": boardCols, "--board-max-width": `${Math.min(1280, boardCols * 88)}px` } as CSSProperties}
+              style={{
+                "--board-cols": visualCols,
+                "--board-max-width": `${Math.min(1280, visualCols * 88)}px`,
+                "--cell-offset-x": compactBoard ? "0%" : `calc(${boardOffset.col * 100}% + ${boardOffset.col} * var(--board-gap))`,
+                "--cell-offset-y": compactBoard ? "0%" : `calc(${boardOffset.row * 100}% + ${boardOffset.row} * var(--board-gap))`,
+              } as CSSProperties}
             >
-              {board.map((tile, index) => (
+              {visualEntries.map(({ tile, index, visualIndex }) => (
                 <div className="cell" role="gridcell" key={index}>
                   {tile && (
                     <button
                       type="button"
                       className={`tile tile-${tile.group} ${selected === index ? "selected" : ""} ${rejectedIndex === index ? "rejected" : ""} ${matchEffect?.indexes.includes(index) ? "matching" : ""} ${clearingIndexes.includes(index) ? "clearing" : ""} ${tile.kind}`}
                       onClick={() => selectTile(index)}
-                      aria-label={`${tile.face}${tile.corner}，第 ${Math.floor(index / boardCols) + 1} 列第 ${index % boardCols + 1} 欄`}
+                      aria-label={`${tile.face}${tile.corner}，第 ${Math.floor(visualIndex / visualCols) + 1} 列第 ${visualIndex % visualCols + 1} 欄`}
                       aria-pressed={selected === index}
                     >
                       {tile.group === "ghost" ? (
@@ -1206,10 +1261,10 @@ export default function Home() {
                 </div>
               ))}
               {matchEffect && (
-                <svg className={`match-path ${matchEffect.diagonal ? "diagonal" : "orthogonal"}`} viewBox={`0 0 ${boardCols} ${boardRows}`} preserveAspectRatio="none" aria-hidden="true">
-                  <polyline className="match-path-glow" pathLength="1" points={matchEffect.path.map((point) => `${point.col},${point.row}`).join(" ")} />
-                  <polyline className="match-path-core" pathLength="1" points={matchEffect.path.map((point) => `${point.col},${point.row}`).join(" ")} />
-                  {matchEffect.path.map((point, index) => <circle key={`${point.row}-${point.col}-${index}`} cx={point.col} cy={point.row} r=".09" />)}
+                <svg className={`match-path ${matchEffect.diagonal ? "diagonal" : "orthogonal"}`} viewBox={`0 0 ${visualCols} ${visualRows}`} preserveAspectRatio="none" aria-hidden="true">
+                  <polyline className="match-path-glow" pathLength="1" points={displayedMatchPath.map((point) => `${point.col},${point.row}`).join(" ")} />
+                  <polyline className="match-path-core" pathLength="1" points={displayedMatchPath.map((point) => `${point.col},${point.row}`).join(" ")} />
+                  {displayedMatchPath.map((point, index) => <circle key={`${point.row}-${point.col}-${index}`} cx={point.col} cy={point.row} r=".09" />)}
                 </svg>
               )}
             </div>

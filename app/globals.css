@@ -27,7 +27,7 @@ button { font: inherit; }
 .player-name input:focus { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(214,175,89,.13); }
 .difficulty-picker { margin: 0 0 15px; padding: 0; border: 0; }
 .difficulty-picker legend { margin-bottom: 8px; color: #a8cdbb; font: 11px/1 "Noto Sans TC","Microsoft JhengHei",sans-serif; letter-spacing: .12em; }
-.difficulty-picker>div { display: grid; grid-template-columns: repeat(3,1fr); gap: 7px; }
+.difficulty-picker>div { display: grid; grid-template-columns: repeat(4,1fr); gap: 7px; }
 .difficulty-picker button { position: relative; min-width: 0; padding: 11px 6px 9px; border: 1px solid rgba(255,255,255,.12); color: #e5eee8; background: rgba(0,0,0,.15); cursor: pointer; transition: border-color .16s ease,background .16s ease,transform .16s ease; }
 .difficulty-picker button:hover { transform: translateY(-2px); border-color: rgba(214,175,89,.62); }
 .difficulty-picker button.active { color: #fff3ca; border-color: var(--gold); background: linear-gradient(150deg,rgba(214,175,89,.2),rgba(214,175,89,.06)); box-shadow: inset 0 0 0 1px rgba(255,234,176,.08),0 5px 18px rgba(0,0,0,.18); }
@@ -95,8 +95,8 @@ button { font: inherit; }
 .table-label span:first-child { color: var(--gold); }
 .mahjong-table { position: relative; padding: clamp(14px,2vw,25px); border: 5px solid #57391f; border-radius: 8px; background: linear-gradient(rgba(255,255,255,.025),rgba(0,0,0,.025)), radial-gradient(circle at center,#147356,#07503d 72%); box-shadow: inset 0 0 0 2px #aa7a3f,inset 0 0 38px rgba(0,0,0,.6),0 13px 28px rgba(0,0,0,.25); }
 .mahjong-table::after { content: ""; position: absolute; inset: 8px; border: 1px solid rgba(235,208,146,.18); pointer-events: none; }
-.board { position: relative; z-index: 2; display: grid; grid-template-columns: repeat(var(--board-cols,12),minmax(0,1fr)); gap: clamp(3px,.45vw,7px); margin: auto; width: 100%; max-width: var(--board-max-width,1080px); animation: board-enter .34s ease-out; }
-.cell { aspect-ratio: .76; min-width: 0; }
+.board { --board-gap: clamp(3px,.45vw,7px); position: relative; z-index: 2; display: grid; grid-template-columns: repeat(var(--board-cols,12),minmax(0,1fr)); gap: var(--board-gap); margin: auto; width: 100%; max-width: var(--board-max-width,1080px); animation: board-enter .34s ease-out; }
+.cell { aspect-ratio: .76; min-width: 0; translate: var(--cell-offset-x,0) var(--cell-offset-y,0); }
 .tile { position: relative; width: 100%; height: 100%; min-width: 0; padding: 0; border: 1px solid #c8b991; border-radius: clamp(3px,.5vw,7px); color: var(--ink); cursor: pointer; overflow: hidden; background: #f5ecd2 url("/art/mahjong-tile-base-v2.png") center/100% 100% no-repeat; box-shadow: 0 3px 0 #9c8557,0 6px 8px rgba(0,0,0,.36),inset 1px 1px 0 #fff; transition: transform .14s ease,filter .14s ease,box-shadow .14s ease; -webkit-tap-highlight-color: transparent; }
 .tile::after { content: ""; position: absolute; z-index: 5; inset: 1px; border-radius: inherit; opacity: 0; pointer-events: none; background: linear-gradient(145deg,rgba(255,226,124,.12),rgba(224,153,38,.3)); box-shadow: inset 0 0 0 2px rgba(255,225,128,.55); transition: opacity .14s ease; }
 .tile:hover { transform: translateY(-3px); filter: brightness(1.06); }
@@ -225,7 +225,7 @@ button { font: inherit; }
   .cheat-note { grid-column: 1/-1; margin: 3px; }
 }
 @media (max-width: 620px) {
-  .menu-shell { padding: 16px 10px 48px; }.menu-card { padding: 28px 20px; }.menu-brand p { margin-bottom: 22px; }.menu-actions small { max-width: 56%; }.difficulty-picker>div { gap: 4px; }.difficulty-picker button { padding-inline: 3px; }.difficulty-picker small { display: none; min-height: 0; }.ranking-list li { grid-template-columns: 27px minmax(70px,1fr) auto; gap: 6px; }.ranking-list li>span:not(.rank-number) { font-size: 9px; }
+  .menu-shell { padding: 16px 10px 48px; }.menu-card { padding: 28px 20px; }.menu-brand p { margin-bottom: 22px; }.menu-actions small { max-width: 56%; }.difficulty-picker>div { grid-template-columns: repeat(2,1fr); gap: 5px; }.difficulty-picker button { padding-inline: 3px; }.difficulty-picker small { display: none; min-height: 0; }.ranking-list li { grid-template-columns: 27px minmax(70px,1fr) auto; gap: 6px; }.ranking-list li>span:not(.rank-number) { font-size: 9px; }
   .game-shell { padding-top: 12px; }
   .brand p { display: none; }.brand-seal { width: 38px; height: 38px; font-size: 20px; }.brand h1 { letter-spacing: .06em; }
   .header-actions .text-button { padding: 7px 8px; font-size: 11px; }
