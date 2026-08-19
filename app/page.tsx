@@ -2,7 +2,7 @@
 
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-const START_TIME = 180;
+const START_TIME = 240;
 
 type DifficultyId = "beginner" | "standard" | "expert";
 type Difficulty = {

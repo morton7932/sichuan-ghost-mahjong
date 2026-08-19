@@ -53,10 +53,13 @@ test("includes the cockatoo one-bamboo pair and excludes flower tiles", async ()
 });
 
 test("uses the familiar seven-dot layout and clear segmented bamboo", async () => {
-  const [sevenDots, sevenBamboo, eightBamboo] = await Promise.all([
+  const [sevenDots, twoBamboo, sevenBamboo, eightBamboo, nineBamboo, oneCharacter] = await Promise.all([
     readFile(new URL("../public/tiles/Pin7.svg", import.meta.url), "utf8"),
+    readFile(new URL("../public/tiles/Sou2.svg", import.meta.url), "utf8"),
     readFile(new URL("../public/tiles/Sou7.svg", import.meta.url), "utf8"),
     readFile(new URL("../public/tiles/Sou8.svg", import.meta.url), "utf8"),
+    readFile(new URL("../public/tiles/Sou9.svg", import.meta.url), "utf8"),
+    readFile(new URL("../public/tiles/Man1.svg", import.meta.url), "utf8"),
   ]);
 
   assert.equal((sevenDots.match(/<circle r="15"/g) ?? []).length, 7);
@@ -65,9 +68,14 @@ test("uses the familiar seven-dot layout and clear segmented bamboo", async () =
   assert.match(sevenDots, /translate\(112 110\)/);
   assert.equal((sevenBamboo.match(/M-9-20Q0-24 9-20/g) ?? []).length, 7);
   assert.doesNotMatch(sevenBamboo, /<rect x="-7"/);
+  assert.match(twoBamboo, /translate\(80 76\)/);
+  assert.match(twoBamboo, /translate\(80 148\)/);
   assert.equal((eightBamboo.match(/M-9-20Q0-24 9-20/g) ?? []).length, 8);
   assert.match(eightBamboo, /rotate\(45\)/);
   assert.match(eightBamboo, /rotate\(-45\)/);
+  assert.equal((eightBamboo.match(/fill="#15568a"/g) ?? []).length, 0);
+  assert.equal((nineBamboo.match(/fill="#b52227"/g) ?? []).length, 9);
+  assert.match(oneCharacter, /font-size="78"[\s\S]*font-size="45"/);
 });
 
 test("offers scored board-size difficulties and lightweight match effects", async () => {
@@ -103,4 +111,6 @@ test("backs up progress and rankings and supports immediate score settlement", a
   assert.match(source, /className="text-button settle-button"/);
   assert.match(css, /\.record-transfer/);
   assert.match(css, /\.settle-button/);
+  assert.match(source, /const START_TIME = 240/);
+  assert.match(css, /\.tile-suo:not\(\.suo-1\) \.tile-art/);
 });
