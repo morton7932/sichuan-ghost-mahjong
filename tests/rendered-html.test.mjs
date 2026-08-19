@@ -161,7 +161,7 @@ test("offers scored board-size difficulties and lightweight match effects", asyn
   assert.match(source, /difficulty: DifficultyId/);
   assert.match(source, /className="match-path-core"/);
   assert.match(source, /const path = findMatchPath\(board, selected, index, boardRows, boardCols\)/);
-  assert.match(source, /const GAME_VERSION = "1\.1\.4"/);
+  assert.match(source, /const GAME_VERSION = "1\.1\.5"/);
   assert.match(source, /className="menu-version">版本 v\{GAME_VERSION\}/);
   assert.match(source, /className="menu-seal" role="img" aria-label="一索鸚鵡"/);
   assert.match(css, /\.tile\.selected::after/);
@@ -210,8 +210,9 @@ test("backs up progress and rankings and supports immediate score settlement", a
   assert.match(source, /compactBoard \? <button type="button" className="tile tile-placeholder" disabled/);
   assert.match(css, /\.tile-placeholder \{[^}]*visibility: hidden/);
   assert.match(source, /remaining >= previousRemainingRef\.current/);
-  assert.match(source, /point\.row - BOARD_MARGIN/);
-  assert.match(source, /point\.col - BOARD_MARGIN/);
+  assert.match(source, /point\.row - BOARD_MARGIN \+ boardOffset\.row/);
+  assert.match(source, /point\.col - BOARD_MARGIN \+ boardOffset\.col/);
+  assert.doesNotMatch(source, /"--cell-offset-x": compactBoard \? "0%"/);
   assert.match(source, /matchMedia\("\(max-width: 620px\)"\)/);
   assert.match(css, /translate: var\(--cell-offset-x,0\) var\(--cell-offset-y,0\)/);
   assert.match(css, /\.tile-suo:not\(\.suo-1\) \.tile-art/);
