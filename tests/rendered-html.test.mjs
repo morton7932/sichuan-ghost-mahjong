@@ -129,6 +129,8 @@ test("backs up progress and rankings and supports immediate score settlement", a
   assert.match(css, /\.data-tools-card/);
   assert.match(source, /occupiedBoardOffset/);
   assert.match(source, /compactBoard/);
+  assert.match(source, /compactOrder/);
+  assert.match(source, /remaining >= previousRemainingRef\.current/);
   assert.match(source, /matchMedia\("\(max-width: 620px\)"\)/);
   assert.match(css, /translate: var\(--cell-offset-x,0\) var\(--cell-offset-y,0\)/);
   assert.match(css, /\.tile-suo:not\(\.suo-1\) \.tile-art/);

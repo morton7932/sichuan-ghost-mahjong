@@ -581,6 +581,7 @@ export default function Home() {
   const [showNewGameSetup, setShowNewGameSetup] = useState(false);
   const [showDataTools, setShowDataTools] = useState(false);
   const [compactBoard, setCompactBoard] = useState(false);
+  const [compactOrder, setCompactOrder] = useState<number[]>([]);
   const [boardOffset, setBoardOffset] = useState<PathPoint>({ row: 0.5, col: 0.5 });
   const [levelBonus, setLevelBonus] = useState(0);
   const [ghostDraw, setGhostDraw] = useState<GhostDraw | null>(null);
@@ -596,21 +597,20 @@ export default function Home() {
   const visualEntries = useMemo(() => {
     const entries = board.map((tile, index) => ({ tile, index, visualIndex: index }));
     if (!compactBoard) return entries;
-    return entries.filter((entry) => entry.tile).map((entry, visualIndex) => ({ ...entry, visualIndex }));
-  }, [board, compactBoard]);
+    return compactOrder.map((index, visualIndex) => ({ tile: board[index], index, visualIndex }));
+  }, [board, compactBoard, compactOrder]);
   const visualCols = compactBoard ? cols : boardCols;
-  const visualRows = compactBoard ? Math.max(1, Math.ceil(remaining / visualCols)) : boardRows;
+  const visualRows = compactBoard ? Math.max(1, Math.ceil(compactOrder.length / visualCols)) : boardRows;
   const displayedMatchPath = useMemo(() => {
     if (!matchEffect) return [];
     if (!compactBoard) {
       return matchEffect.path.map((point) => ({ row: point.row + boardOffset.row, col: point.col + boardOffset.col }));
     }
-    const occupiedIndexes = board.flatMap((tile, index) => tile ? [index] : []);
     return matchEffect.indexes.map((originalIndex) => {
-      const visualIndex = occupiedIndexes.indexOf(originalIndex);
+      const visualIndex = compactOrder.indexOf(originalIndex);
       return { row: Math.floor(visualIndex / visualCols) + 0.5, col: visualIndex % visualCols + 0.5 };
     });
-  }, [board, boardOffset, compactBoard, matchEffect, visualCols]);
+  }, [boardOffset, compactBoard, compactOrder, matchEffect, visualCols]);
   const progress = ((rows * cols - remaining) / (rows * cols)) * 100;
   const inputLocked = phase !== "playing" || matchEffect !== null || clearingIndexes.length > 0;
   const awardPoints = useCallback((base: number) => Math.round(base * multiplier), [multiplier]);
@@ -624,11 +624,15 @@ export default function Home() {
   }, []);
 
   const previousRemainingRef = useRef(remaining);
+  const previousBoardLengthRef = useRef(board.length);
   useEffect(() => {
-    if (remaining >= previousRemainingRef.current) {
+    const layoutChanged = remaining >= previousRemainingRef.current || board.length !== previousBoardLengthRef.current;
+    if (layoutChanged) {
       setBoardOffset(occupiedBoardOffset(board, boardRows, boardCols));
+      setCompactOrder(board.flatMap((tile, index) => tile ? [index] : []));
     }
     previousRemainingRef.current = remaining;
+    previousBoardLengthRef.current = board.length;
   }, [board, boardCols, boardRows, remaining]);
 
   useEffect(() => {
