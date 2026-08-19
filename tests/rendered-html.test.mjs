@@ -118,5 +118,13 @@ test("backs up progress and rankings and supports immediate score settlement", a
   assert.match(source, /col === centerCol/);
   assert.doesNotMatch(source, /setTimeout\(enterNextLevel/);
   assert.match(source, /準備好再繼續/);
+  assert.match(source, /showNewGameSetup/);
+  assert.match(source, /選擇新遊戲難度/);
+  assert.match(source, /讀取進度會沿用存檔原本的難度/);
+  assert.match(css, /\.new-game-card/);
+  assert.match(source, /showDataTools/);
+  assert.match(source, /資料與離線版/);
+  assert.match(source, /entry\.difficulty \? difficultyById\(entry\.difficulty\)\.label : "\?"/);
+  assert.match(css, /\.data-tools-card/);
   assert.match(css, /\.tile-suo:not\(\.suo-1\) \.tile-art/);
 });

@@ -90,7 +90,7 @@ type SaveData = {
   score: number;
   savedAt: string;
 };
-type Ranking = SaveData & { finishedAt: string };
+type Ranking = Omit<SaveData, "difficulty"> & { difficulty: DifficultyId | null; finishedAt: string };
 type GameRecordFile = {
   format: "sichuan-ghost-mahjong-record";
   version: 1;
@@ -481,7 +481,7 @@ function normalizeRanking(data: unknown): Ranking | null {
     savedAt: typeof candidate.savedAt === "string" ? candidate.savedAt : finishedAt,
   });
   if (!save) return null;
-  return { ...save, finishedAt };
+  return { ...save, difficulty: isDifficultyId(candidate.difficulty) ? candidate.difficulty : null, finishedAt };
 }
 
 function sortRankings(rankings: Ranking[]): Ranking[] {
@@ -564,6 +564,8 @@ export default function Home() {
   const [phase, setPhase] = useState<Phase>("playing");
   const [message, setMessage] = useState("牌局開始：找出第一對牌吧");
   const [showRules, setShowRules] = useState(false);
+  const [showNewGameSetup, setShowNewGameSetup] = useState(false);
+  const [showDataTools, setShowDataTools] = useState(false);
   const [levelBonus, setLevelBonus] = useState(0);
   const [ghostDraw, setGhostDraw] = useState<GhostDraw | null>(null);
   const ghostTokenRef = useRef(0);
@@ -623,6 +625,7 @@ export default function Home() {
     setGhostDraw(null);
     setPhase("playing");
     setMessage("牌局開始：找出第一對牌吧");
+    setShowNewGameSetup(false);
     createCheckpoint({ playerName: name, difficulty, level: 1, clearedLevels: 0, time: START_TIME, score: 0 });
     setScreen("game");
   }, [createCheckpoint, difficulty, playerName]);
@@ -659,6 +662,8 @@ export default function Home() {
     setMatchEffect(null);
     setClearingIndexes([]);
     setShowRules(false);
+    setShowNewGameSetup(false);
+    setShowDataTools(false);
     setSavedProgress(readSave());
     setRankings(readRankings());
     setScreen("menu");
@@ -1019,8 +1024,58 @@ export default function Home() {
                   aria-label="玩家名稱"
                 />
               </label>
+              <nav className="menu-actions" aria-label="主選單">
+                <button onClick={() => { setShowDataTools(false); setShowNewGameSetup(true); }}><b>開始遊玩</b><small>選擇難度後，從第 1 關開始</small></button>
+                <button onClick={loadGame} disabled={!storageReady || !savedProgress}>
+                  <b>讀取進度</b>
+                  <small>{savedProgress
+                    ? `${difficultyById(savedProgress.difficulty).label} ${difficultyById(savedProgress.difficulty).rows}×${difficultyById(savedProgress.difficulty).cols}・第 ${savedProgress.level} 關・${savedProgress.score.toLocaleString("zh-TW")} 分`
+                    : storageReady ? "此瀏覽器尚無存檔" : "正在讀取…"}</small>
+                </button>
+                <button onClick={() => setScreen("leaderboard")}><b>排行榜</b><small>查看此瀏覽器的最佳牌局</small></button>
+                <button onClick={() => { setShowNewGameSetup(false); setShowDataTools(true); }}><b>資料與離線版</b><small>匯入、匯出或下載離線遊戲</small></button>
+                <button onClick={() => setScreen("exit")}><b>結束遊戲</b><small>離開牌桌</small></button>
+              </nav>
+              <p className="storage-note">進度只保存在這台裝置的瀏覽器。中途離開時，會回到本關開始前的存檔。</p>
+            </>
+          )}
+
+          {screen === "leaderboard" && (
+            <div className="ranking-panel">
+              <div className="panel-heading"><div><span>LOCAL RANKING</span><h2>本機排行榜</h2></div><button onClick={() => setScreen("menu")}>返回</button></div>
+              {rankings.length === 0 ? (
+                <div className="empty-ranking">尚無完賽紀錄<br /><small>完成一局後，成績會留在這台裝置。</small></div>
+              ) : (
+                <ol className="ranking-list">
+                  {rankings.slice(0, 10).map((entry, index) => (
+                    <li key={`${entry.finishedAt}-${index}`}>
+                      <span className="rank-number">{String(index + 1).padStart(2, "0")}</span>
+                      <strong>{entry.playerName}</strong>
+                      <span>{entry.difficulty ? difficultyById(entry.difficulty).label : "?"}・{entry.score.toLocaleString("zh-TW")} 分・過 {entry.clearedLevels} 關</span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          )}
+
+          {screen === "exit" && (
+            <div className="exit-panel">
+              <span className="result-seal">休</span>
+              <h2>牌局已結束</h2>
+              <p>進度已保留在本關開始前，可直接關閉這個網頁。</p>
+              <button className="primary-button" onClick={() => setScreen("menu")}>返回主選單</button>
+            </div>
+          )}
+        </section>
+        {screen === "menu" && showNewGameSetup && (
+          <div className="overlay" role="presentation">
+            <div className="new-game-card" role="dialog" aria-modal="true" aria-labelledby="new-game-title">
+              <span className="eyebrow">NEW GAME</span>
+              <h2 id="new-game-title">選擇新遊戲難度</h2>
+              <p>難度只套用到這次新牌局；讀取進度會沿用存檔原本的難度。</p>
               <fieldset className="difficulty-picker">
-                <legend>盤面大小・難度</legend>
+                <legend>盤面大小・計分倍率</legend>
                 <div>
                   {DIFFICULTIES.map((option) => (
                     <button
@@ -1038,17 +1093,19 @@ export default function Home() {
                   ))}
                 </div>
               </fieldset>
-              <nav className="menu-actions" aria-label="主選單">
-                <button onClick={startNewGame}><b>開始遊玩</b><small>從第 1 關展開新牌局</small></button>
-                <button onClick={loadGame} disabled={!storageReady || !savedProgress}>
-                  <b>讀取進度</b>
-                  <small>{savedProgress
-                    ? `${difficultyById(savedProgress.difficulty).label} ${difficultyById(savedProgress.difficulty).rows}×${difficultyById(savedProgress.difficulty).cols}・第 ${savedProgress.level} 關・${savedProgress.score.toLocaleString("zh-TW")} 分`
-                    : storageReady ? "此瀏覽器尚無存檔" : "正在讀取…"}</small>
-                </button>
-                <button onClick={() => setScreen("leaderboard")}><b>排行榜</b><small>查看此瀏覽器的最佳牌局</small></button>
-                <button onClick={() => setScreen("exit")}><b>結束遊戲</b><small>離開牌桌</small></button>
-              </nav>
+              <div className="new-game-actions">
+                <button type="button" className="secondary-result-button" onClick={() => setShowNewGameSetup(false)}>取消</button>
+                <button type="button" onClick={startNewGame}>以{difficultyConfig.label}難度開始</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {screen === "menu" && showDataTools && (
+          <div className="overlay" role="presentation">
+            <div className="data-tools-card" role="dialog" aria-modal="true" aria-labelledby="data-tools-title">
+              <span className="eyebrow">DATA & OFFLINE</span>
+              <h2 id="data-tools-title">資料與離線版</h2>
+              <p>備份檔會同時保存進度與排行榜；匯入時會取代這台瀏覽器的現有紀錄。</p>
               <section className="record-transfer" aria-label="遊戲紀錄備份">
                 <div>
                   <button
@@ -1071,45 +1128,16 @@ export default function Home() {
                   />
                 </div>
                 <p className={recordNotice ? recordNotice.tone : ""} aria-live="polite">
-                  {recordNotice?.text ?? "備份檔同時包含關卡進度與排行榜，匯入時會取代本機紀錄。"}
+                  {recordNotice?.text ?? "可將 JSON 備份檔帶到另一台裝置繼續遊玩。"}
                 </p>
               </section>
               <a className="offline-download" href="./downloads/sichuan-ghost-mahjong-offline.zip" download>
                 <span>↓</span><b>下載離線版</b><small>解壓縮後雙擊 index.html</small>
               </a>
-              <p className="storage-note">進度只保存在這台裝置的瀏覽器。中途離開時，會回到本關開始前的存檔。</p>
-            </>
-          )}
-
-          {screen === "leaderboard" && (
-            <div className="ranking-panel">
-              <div className="panel-heading"><div><span>LOCAL RANKING</span><h2>本機排行榜</h2></div><button onClick={() => setScreen("menu")}>返回</button></div>
-              {rankings.length === 0 ? (
-                <div className="empty-ranking">尚無完賽紀錄<br /><small>完成一局後，成績會留在這台裝置。</small></div>
-              ) : (
-                <ol className="ranking-list">
-                  {rankings.slice(0, 10).map((entry, index) => (
-                    <li key={`${entry.finishedAt}-${index}`}>
-                      <span className="rank-number">{String(index + 1).padStart(2, "0")}</span>
-                      <strong>{entry.playerName}</strong>
-                      <span>{difficultyById(entry.difficulty).label} {difficultyById(entry.difficulty).rows}×{difficultyById(entry.difficulty).cols}・過 {entry.clearedLevels} 關</span>
-                      <b>{entry.score.toLocaleString("zh-TW")}</b>
-                    </li>
-                  ))}
-                </ol>
-              )}
+              <button type="button" className="data-tools-close" onClick={() => setShowDataTools(false)}>返回主選單</button>
             </div>
-          )}
-
-          {screen === "exit" && (
-            <div className="exit-panel">
-              <span className="result-seal">休</span>
-              <h2>牌局已結束</h2>
-              <p>進度已保留在本關開始前，可直接關閉這個網頁。</p>
-              <button className="primary-button" onClick={() => setScreen("menu")}>返回主選單</button>
-            </div>
-          )}
-        </section>
+          </div>
+        )}
         <footer className="menu-footer">寫實牌面與鬼面為本站原創素材・不使用商業遊戲圖像</footer>
       </main>
     );
