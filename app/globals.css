@@ -18,7 +18,9 @@ button { font: inherit; }
 .menu-card::before,.menu-card::after { content: ""; position: absolute; width: 32px; height: 32px; border-color: var(--gold); opacity: .65; }
 .menu-card::before { top: 10px; left: 10px; border-top: 1px solid; border-left: 1px solid; }.menu-card::after { right: 10px; bottom: 10px; border-right: 1px solid; border-bottom: 1px solid; }
 .menu-brand { text-align: center; }
-.menu-seal { display: grid; place-items: center; width: 57px; height: 57px; margin: 0 auto 18px; border: 1px solid var(--gold); color: var(--gold); font-size: 30px; transform: rotate(-3deg); box-shadow: inset 0 0 0 4px rgba(214,175,89,.08); }
+.menu-seal { display: grid; place-items: center; width: 84px; height: 84px; margin: 0 auto 13px; overflow: hidden; border: 1px solid rgba(214,175,89,.72); border-radius: 50%; background: radial-gradient(circle at 50% 38%,#f8f1db 0 51%,#e2c984 75%,#92702e 100%); box-shadow: inset 0 0 0 4px rgba(255,248,215,.22),0 8px 24px rgba(0,0,0,.28); }
+.menu-seal::before { content: ""; width: 92%; height: 92%; background: url("/art/cockatoo-sou1.png") 50% 54%/contain no-repeat; filter: drop-shadow(0 4px 3px rgba(22,42,32,.28)); }
+.menu-version { display: block; color: #bfa768; font: 600 10px/1 "Noto Sans TC","Microsoft JhengHei",sans-serif; letter-spacing: .16em; }
 .menu-brand h1 { margin: 8px 0 5px; color: #fff3cf; font-size: clamp(30px,7vw,47px); letter-spacing: .13em; }
 .menu-brand p { margin: 0 0 30px; color: #91bfa9; font: 11px/1.3 "Noto Sans TC","Microsoft JhengHei",sans-serif; letter-spacing: .2em; }
 .player-name { display: grid; gap: 8px; margin-bottom: 14px; }

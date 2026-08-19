@@ -3,6 +3,7 @@
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const START_TIME = 240;
+const GAME_VERSION = "1.1.0";
 const BOARD_MARGIN = 1;
 const GHOST_GAP = 1;
 
@@ -606,11 +607,15 @@ export default function Home() {
     if (!compactBoard) {
       return matchEffect.path.map((point) => ({ row: point.row + boardOffset.row, col: point.col + boardOffset.col }));
     }
-    return matchEffect.indexes.map((originalIndex) => {
+    const endpoints = matchEffect.indexes.map((originalIndex) => {
       const visualIndex = compactOrder.indexOf(originalIndex);
       return { row: Math.floor(visualIndex / visualCols) + 0.5, col: visualIndex % visualCols + 0.5 };
     });
-  }, [boardOffset, compactBoard, compactOrder, matchEffect, visualCols]);
+    if (matchEffect.diagonal) return endpoints;
+    const visualIndexes = matchEffect.indexes.map((originalIndex) => compactOrder.indexOf(originalIndex)) as [number, number];
+    const visualBoard = compactOrder.map((originalIndex) => board[originalIndex]);
+    return findTwoTurnPath(visualBoard, visualIndexes[0], visualIndexes[1], visualRows, visualCols) ?? endpoints;
+  }, [board, boardOffset, compactBoard, compactOrder, matchEffect, visualCols, visualRows]);
   const progress = ((rows * cols - remaining) / (rows * cols)) * 100;
   const inputLocked = phase !== "playing" || matchEffect !== null || clearingIndexes.length > 0;
   const awardPoints = useCallback((base: number) => Math.round(base * multiplier), [multiplier]);
@@ -737,7 +742,7 @@ export default function Home() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `四川鬼面局-遊戲紀錄-${new Date().toISOString().slice(0, 10)}.json`;
+    link.download = `四川省-蔡小白-遊戲紀錄-${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -1060,9 +1065,9 @@ export default function Home() {
         <div className="ambient ambient-two" />
         <section className={`menu-card ${screen}`} aria-labelledby="menu-title">
           <div className="menu-brand">
-            <span className="menu-seal">川</span>
-            <span className="eyebrow">SICHUAN GHOST MAHJONG</span>
-            <h1 id="menu-title">四川・鬼面局</h1>
+            <span className="menu-seal" role="img" aria-label="一索鸚鵡" />
+            <span className="menu-version">版本 v{GAME_VERSION}</span>
+            <h1 id="menu-title">四川省-蔡小白</h1>
             <p>遠斜對消 × 鬼牌變局</p>
           </div>
 
@@ -1087,7 +1092,7 @@ export default function Home() {
                     : storageReady ? "此瀏覽器尚無存檔" : "正在讀取…"}</small>
                 </button>
                 <button onClick={() => setScreen("leaderboard")}><b>排行榜</b><small>查看此瀏覽器的最佳牌局</small></button>
-                <button onClick={() => { setShowNewGameSetup(false); setShowDataTools(true); }}><b>資料與離線版</b><small>匯入、匯出或下載離線遊戲</small></button>
+                <button onClick={() => { setShowNewGameSetup(false); setShowDataTools(true); }}><b>資料與下載</b><small>匯入、匯出或下載遊戲檔案</small></button>
                 <button onClick={() => setScreen("exit")}><b>結束遊戲</b><small>離開牌桌</small></button>
               </nav>
               <p className="storage-note">進度只保存在這台裝置的瀏覽器。中途離開時，會回到本關開始前的存檔。</p>
@@ -1158,7 +1163,7 @@ export default function Home() {
           <div className="overlay" role="presentation">
             <div className="data-tools-card" role="dialog" aria-modal="true" aria-labelledby="data-tools-title">
               <span className="eyebrow">DATA & OFFLINE</span>
-              <h2 id="data-tools-title">資料與離線版</h2>
+              <h2 id="data-tools-title">資料與下載</h2>
               <p>備份檔會同時保存進度與排行榜；匯入時會取代這台瀏覽器的現有紀錄。</p>
               <section className="record-transfer" aria-label="遊戲紀錄備份">
                 <div>
@@ -1186,7 +1191,7 @@ export default function Home() {
                 </p>
               </section>
               <a className="offline-download" href="./downloads/sichuan-ghost-mahjong-offline.zip" download>
-                <span>↓</span><b>下載離線版</b><small>解壓縮後雙擊 index.html</small>
+                <span>↓</span><b>下載遊戲檔案</b><small>解壓縮後雙擊 index.html</small>
               </a>
               <button type="button" className="data-tools-close" onClick={() => setShowDataTools(false)}>返回主選單</button>
             </div>
@@ -1204,7 +1209,7 @@ export default function Home() {
       <header className="topbar">
         <div className="brand">
           <span className="brand-seal">川</span>
-          <div><h1>四川・鬼面局</h1><p>遠斜對消 × 鬼牌變局</p></div>
+          <div><h1>四川省-蔡小白</h1><p>遠斜對消 × 鬼牌變局</p></div>
         </div>
         <div className="header-actions">
           <button className="text-button" onClick={() => setShowRules(true)}>玩法說明</button>
@@ -1325,7 +1330,7 @@ export default function Home() {
         <div className="overlay rules-overlay">
           <div className="rules-card" role="dialog" aria-modal="true" aria-labelledby="rules-title">
             <button className="close-button" onClick={() => setShowRules(false)} aria-label="關閉玩法說明">×</button>
-            <span className="eyebrow">HOW TO PLAY</span><h2 id="rules-title">鬼面四川省</h2>
+            <span className="eyebrow">HOW TO PLAY</span><h2 id="rules-title">四川省-蔡小白</h2>
             <div className="rules-grid">
               <div><b>01</b><p><strong>基本對消</strong>相同牌以不超過兩次轉彎的空路相連，即可消除；盤外也算空路。</p></div>
               <div><b>02</b><p><strong>遠距斜線</strong>同一條 45° 斜線上的相同牌不受中間牌阻擋，無論多遠都能對消。</p></div>
