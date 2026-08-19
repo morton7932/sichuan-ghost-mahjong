@@ -3,7 +3,7 @@
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const START_TIME = 240;
-const GAME_VERSION = "1.2.0";
+const GAME_VERSION = "1.3.0";
 const BOARD_MARGIN = 1;
 const GHOST_GAP = 1;
 
@@ -121,10 +121,101 @@ type GameRecordFile = {
   rankings: Ranking[];
 };
 type RecordNotice = { tone: "success" | "error"; text: string };
+type AudioSettings = { music: boolean; sound: boolean };
+type SoundEffectName = "click" | "select" | "reject" | "match" | "bonus" | "cheat" | "tick" | "ghost" | "reveal" | "level" | "gameover";
 
 const SAVE_KEY = "sichuan-ghost-save-v1";
 const RANKING_KEY = "sichuan-ghost-ranking-v1";
 const RECORD_FORMAT = "sichuan-ghost-mahjong-record";
+const AUDIO_SETTINGS_KEY = "sichuan-ghost-audio-v1";
+
+// 原創五聲音階短句，以 Web Audio 即時合成；不載入任何第三方音樂或音效檔。
+const BGM_NOTES = [261.63, 329.63, 392, 329.63, 293.66, 349.23, 440, 349.23];
+const BGM_BASS = [130.81, 146.83, 164.81, 146.83];
+let sharedAudioContext: AudioContext | null = null;
+let backgroundMusicTimer: number | null = null;
+let backgroundMusicStep = 0;
+
+function ensureAudioContext(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  sharedAudioContext ??= new AudioContext({ latencyHint: "interactive" });
+  if (sharedAudioContext.state === "suspended") void sharedAudioContext.resume().catch(() => undefined);
+  return sharedAudioContext;
+}
+
+function scheduleTone(frequency: number, duration: number, volume: number, type: OscillatorType = "sine", delay = 0) {
+  const context = ensureAudioContext();
+  if (!context) return;
+  const start = context.currentTime + delay;
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, start);
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(volume, start + 0.014);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  oscillator.connect(gain).connect(context.destination);
+  oscillator.start(start);
+  oscillator.stop(start + duration + 0.02);
+}
+
+function playSoundEffect(name: SoundEffectName) {
+  if (name === "click") scheduleTone(440, 0.045, 0.018, "sine");
+  if (name === "select") scheduleTone(560, 0.07, 0.025, "sine");
+  if (name === "reject") scheduleTone(145, 0.14, 0.03, "sawtooth");
+  if (name === "match" || name === "bonus") {
+    scheduleTone(659.25, 0.16, 0.035, "sine");
+    scheduleTone(name === "bonus" ? 987.77 : 783.99, 0.2, 0.032, "sine", 0.08);
+    if (name === "bonus") scheduleTone(1318.51, 0.24, 0.025, "sine", 0.17);
+  }
+  if (name === "cheat") {
+    scheduleTone(196, 0.16, 0.03, "triangle");
+    scheduleTone(392, 0.22, 0.028, "triangle", 0.09);
+  }
+  if (name === "tick") scheduleTone(740, 0.035, 0.012, "square");
+  if (name === "ghost") {
+    scheduleTone(98, 0.46, 0.035, "sawtooth");
+    scheduleTone(147, 0.42, 0.022, "triangle", 0.08);
+  }
+  if (name === "reveal") {
+    scheduleTone(220, 0.25, 0.035, "triangle");
+    scheduleTone(440, 0.36, 0.035, "sine", 0.11);
+  }
+  if (name === "level") [523.25, 659.25, 783.99].forEach((note, index) => scheduleTone(note, 0.28, 0.032, "sine", index * 0.1));
+  if (name === "gameover") [293.66, 246.94, 196].forEach((note, index) => scheduleTone(note, 0.34, 0.028, "triangle", index * 0.14));
+}
+
+function playBackgroundMusicStep() {
+  const noteIndex = backgroundMusicStep % BGM_NOTES.length;
+  scheduleTone(BGM_NOTES[noteIndex], 0.38, 0.018, "sine");
+  if (noteIndex % 4 === 0) scheduleTone(BGM_BASS[Math.floor(backgroundMusicStep / 4) % BGM_BASS.length], 0.72, 0.012, "triangle");
+  backgroundMusicStep += 1;
+}
+
+function startBackgroundMusic() {
+  if (backgroundMusicTimer !== null || !ensureAudioContext()) return;
+  playBackgroundMusicStep();
+  backgroundMusicTimer = window.setInterval(playBackgroundMusicStep, 620);
+}
+
+function stopBackgroundMusic() {
+  if (backgroundMusicTimer === null) return;
+  window.clearInterval(backgroundMusicTimer);
+  backgroundMusicTimer = null;
+}
+
+function readAudioSettings(): AudioSettings {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(AUDIO_SETTINGS_KEY) ?? "null") as Partial<AudioSettings> | null;
+    return { music: parsed?.music !== false, sound: parsed?.sound !== false };
+  } catch {
+    return { music: true, sound: true };
+  }
+}
+
+function writeAudioSettings(settings: AudioSettings) {
+  try { window.localStorage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify(settings)); } catch { /* 儲存停用時仍可調整本次音訊 */ }
+}
 
 const numerals = ["一", "二", "三", "四", "五", "六", "七", "八", "九"];
 const normalKinds: Omit<Tile, "uid">[] = [
@@ -622,6 +713,8 @@ export default function Home() {
   const [rankings, setRankings] = useState<Ranking[]>([]);
   const [storageReady, setStorageReady] = useState(false);
   const [recordNotice, setRecordNotice] = useState<RecordNotice | null>(null);
+  const [musicEnabled, setMusicEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const [difficulty, setDifficulty] = useState<DifficultyId>(DEFAULT_DIFFICULTY);
   const [level, setLevel] = useState(1);
   const [time, setTime] = useState(START_TIME);
@@ -646,6 +739,8 @@ export default function Home() {
   const animationTokenRef = useRef(0);
   const rankingRecordedRef = useRef(false);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const musicEnabledRef = useRef(true);
+  const soundEnabledRef = useRef(true);
 
   const difficultyConfig = useMemo(() => difficultyById(difficulty), [difficulty]);
   const { rows, cols, multiplier } = difficultyConfig;
@@ -678,6 +773,37 @@ export default function Home() {
   const awardPoints = useCallback((base: number) => Math.round(base * multiplier), [multiplier]);
 
   useEffect(() => {
+    let unlocked = false;
+    const unlockAudio = () => {
+      if (unlocked) return;
+      unlocked = true;
+      window.removeEventListener("pointerdown", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
+      if (musicEnabledRef.current) startBackgroundMusic();
+      else if (soundEnabledRef.current) ensureAudioContext();
+    };
+    const playButtonSound = (event: MouseEvent) => {
+      const button = (event.target as HTMLElement | null)?.closest("button");
+      if (soundEnabledRef.current && button && !button.classList.contains("tile") && !button.closest(".cheats")) playSoundEffect("click");
+    };
+    const syncVisibility = () => {
+      if (document.hidden) stopBackgroundMusic();
+      else if (musicEnabledRef.current && sharedAudioContext) startBackgroundMusic();
+    };
+    window.addEventListener("pointerdown", unlockAudio);
+    window.addEventListener("keydown", unlockAudio);
+    window.addEventListener("click", playButtonSound);
+    document.addEventListener("visibilitychange", syncVisibility);
+    return () => {
+      window.removeEventListener("pointerdown", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
+      window.removeEventListener("click", playButtonSound);
+      document.removeEventListener("visibilitychange", syncVisibility);
+      stopBackgroundMusic();
+    };
+  }, []);
+
+  useEffect(() => {
     const media = window.matchMedia("(max-width: 620px)");
     const syncBoardMode = () => setCompactBoard(media.matches);
     syncBoardMode();
@@ -700,8 +826,15 @@ export default function Home() {
     const hydrationTimer = window.setTimeout(() => {
       const save = readSave();
       const storedRankings = readRankings();
+      const audioSettings = readAudioSettings();
       setSavedProgress(save);
       setRankings(storedRankings);
+      setMusicEnabled(audioSettings.music);
+      setSoundEnabled(audioSettings.sound);
+      musicEnabledRef.current = audioSettings.music;
+      soundEnabledRef.current = audioSettings.sound;
+      if (!audioSettings.music) stopBackgroundMusic();
+      else if (sharedAudioContext) startBackgroundMusic();
       if (save?.playerName) setPlayerName(save.playerName);
       if (save?.difficulty) setDifficulty(save.difficulty);
       setStorageReady(true);
@@ -713,6 +846,23 @@ export default function Home() {
     const save: SaveData = { ...data, version: 2, savedAt: new Date().toISOString() };
     if (writeSave(save)) setSavedProgress(save);
     return save;
+  }, []);
+
+  const toggleMusic = useCallback(() => {
+    const next = !musicEnabledRef.current;
+    musicEnabledRef.current = next;
+    setMusicEnabled(next);
+    writeAudioSettings({ music: next, sound: soundEnabledRef.current });
+    if (next) startBackgroundMusic();
+    else stopBackgroundMusic();
+  }, []);
+
+  const toggleSound = useCallback(() => {
+    const next = !soundEnabledRef.current;
+    soundEnabledRef.current = next;
+    setSoundEnabled(next);
+    writeAudioSettings({ music: musicEnabledRef.current, sound: next });
+    if (next) playSoundEffect("click");
   }, []);
 
   const charge = useCallback((cost: number) => {
@@ -851,6 +1001,7 @@ export default function Home() {
     try { window.localStorage.removeItem(SAVE_KEY); } catch { /* 儲存停用時仍可正常結算 */ }
     setSavedProgress(null);
     setPhase("over");
+    if (soundEnabledRef.current) playSoundEffect("gameover");
   }, [phase, screen]);
 
   useEffect(() => {
@@ -860,6 +1011,7 @@ export default function Home() {
         if (current <= 1) {
           setPhase("over");
           setMessage("時辰已到，再來一局吧");
+          if (soundEnabledRef.current) playSoundEffect("gameover");
           return 0;
         }
         return current - 1;
@@ -875,6 +1027,7 @@ export default function Home() {
       setLevelBonus(bonus);
       setPhase("levelup");
       setMessage(`清盤！下一關獎勵 ${bonus} 秒`);
+      if (soundEnabledRef.current) playSoundEffect("level");
       createCheckpoint({
         playerName,
         difficulty,
@@ -926,6 +1079,7 @@ export default function Home() {
     setPhase("ghost");
     setGhostDraw({ sourceBoard, selectedIndex: selectedEffectIndex, activeIndex: 0, stage: "spinning" });
     setMessage("鬼面輪盤轉動中…");
+    if (soundEnabledRef.current) playSoundEffect("ghost");
 
     void (async () => {
       const totalSteps = 28;
@@ -937,9 +1091,11 @@ export default function Home() {
           ? selectedEffectIndex
           : (step * 3 + Math.floor(Math.random() * GHOST_EFFECTS.length)) % GHOST_EFFECTS.length;
         setGhostDraw((current) => current ? { ...current, activeIndex } : current);
+        if (soundEnabledRef.current) playSoundEffect("tick");
       }
       if (ghostTokenRef.current !== token) return;
       setGhostDraw((current) => current ? { ...current, activeIndex: selectedEffectIndex, stage: "result" } : current);
+      if (soundEnabledRef.current) playSoundEffect("reveal");
       await new Promise((resolve) => window.setTimeout(resolve, 3000));
       if (ghostTokenRef.current !== token) return;
 
@@ -958,11 +1114,13 @@ export default function Home() {
     if (selected === null) {
       setSelected(index);
       setMessage("再選一張相同的牌");
+      if (soundEnabledRef.current) playSoundEffect("select");
       return;
     }
     if (selected === index) {
       setSelected(null);
       setMessage("已取消選牌");
+      if (soundEnabledRef.current) playSoundEffect("select");
       return;
     }
     const path = findMatchPath(board, selected, index, boardRows, boardCols);
@@ -972,6 +1130,7 @@ export default function Home() {
       window.setTimeout(() => setRejectedIndex((current) => current === rejected ? null : current), 320);
       setSelected(index);
       setMessage(board[selected]?.kind === board[index]?.kind ? "路線被擋住了，換一組試試" : "花色不同，已改選這張牌");
+      if (soundEnabledRef.current) playSoundEffect("reject");
       return;
     }
 
@@ -997,6 +1156,7 @@ export default function Home() {
     ].filter(Boolean);
     const rewardDetail = reasons.length ? `（${reasons.join("、")}）` : "";
     setMessage(`${diagonal ? "長斜線" : "路徑"}連線成立！ +${reward.seconds} 秒${rewardDetail}${skillPoints ? `・技巧獎勵 +${skillPoints} 分` : ""}`);
+    if (soundEnabledRef.current) playSoundEffect(reward.seconds > 4 ? "bonus" : "match");
 
     window.setTimeout(() => {
       if (animationTokenRef.current !== token) return;
@@ -1023,6 +1183,7 @@ export default function Home() {
     setScore((current) => current + awardPoints(pairs.length * 60));
     setSelected(null);
     setMessage(`神機拿牌：消去 ${pairs.length} 組，未獲得加時`);
+    if (soundEnabledRef.current) playSoundEffect("cheat");
     window.setTimeout(() => {
       if (animationTokenRef.current !== token) return;
       setBoard(next);
@@ -1047,6 +1208,7 @@ export default function Home() {
     setScore((current) => current + awardPoints(matches * 25));
     setSelected(null);
     setMessage(`同花消牌：消去 ${matches} 張，未獲得加時`);
+    if (soundEnabledRef.current) playSoundEffect("cheat");
     window.setTimeout(() => {
       if (animationTokenRef.current !== token) return;
       setClearingIndexes([]);
@@ -1063,6 +1225,7 @@ export default function Home() {
     setBoard(hasMove(next, boardRows, boardCols) ? next : arrangeEasy(next, boardRows, boardCols));
     setSelected(null);
     setMessage("移位大法：所有麻將已重新落位");
+    if (soundEnabledRef.current) playSoundEffect("cheat");
   }, [board, boardCols, boardRows, charge, inputLocked]);
 
   const activateD = useCallback(() => {
@@ -1078,6 +1241,7 @@ export default function Home() {
     setBoard(next);
     setSelected(null);
     setMessage(`乾坤挪移：暗中調換了 ${count} 張牌`);
+    if (soundEnabledRef.current) playSoundEffect("cheat");
   }, [board, charge, inputLocked]);
 
   useEffect(() => {
@@ -1086,7 +1250,10 @@ export default function Home() {
       const key = event.key.toLowerCase();
       if (key === "insert") {
         event.preventDefault();
-        if (phase !== "over") setTime((current) => current + 10);
+        if (phase !== "over") {
+          setTime((current) => current + 10);
+          if (soundEnabledRef.current) playSoundEffect("bonus");
+        }
         return;
       }
       if (!["w", "a", "s", "d"].includes(key)) return;
@@ -1156,7 +1323,7 @@ export default function Home() {
                     : storageReady ? "此瀏覽器尚無存檔" : "正在讀取…"}</small>
                 </button>
                 <button onClick={() => setScreen("leaderboard")}><b>排行榜</b><small>查看此瀏覽器的最佳牌局</small></button>
-                <button onClick={() => { setShowNewGameSetup(false); setShowDataTools(true); }}><b>資料與下載</b><small>匯入、匯出或下載遊戲檔案</small></button>
+                <button onClick={() => { setShowNewGameSetup(false); setShowDataTools(true); }}><b>設定與資料</b><small>音訊、紀錄備份與遊戲下載</small></button>
                 <button onClick={() => setScreen("exit")}><b>結束遊戲</b><small>離開牌桌</small></button>
               </nav>
               <p className="storage-note">進度只保存在這台裝置的瀏覽器。中途離開時，會回到本關開始前的存檔。</p>
@@ -1226,10 +1393,23 @@ export default function Home() {
         {screen === "menu" && showDataTools && (
           <div className="overlay" role="presentation">
             <div className="data-tools-card" role="dialog" aria-modal="true" aria-labelledby="data-tools-title">
-              <span className="eyebrow">DATA & OFFLINE</span>
-              <h2 id="data-tools-title">資料與下載</h2>
-              <p>備份檔會同時保存進度與排行榜；匯入時會取代這台瀏覽器的現有紀錄。</p>
+              <span className="eyebrow">SETTINGS & DATA</span>
+              <h2 id="data-tools-title">設定與資料</h2>
+              <p>音訊由程式即時合成，不載入外部音樂檔；設定會保存在這台瀏覽器。</p>
+              <section className="audio-settings" aria-label="音訊設定">
+                <div><strong>音訊設定</strong><small>音樂與效果可分別關閉</small></div>
+                <div className="audio-toggle-grid">
+                  <button type="button" className={musicEnabled ? "active" : ""} aria-pressed={musicEnabled} onClick={toggleMusic}>
+                    <span aria-hidden="true">♫</span><b>背景音樂</b><small>{musicEnabled ? "開啟" : "關閉"}</small>
+                  </button>
+                  <button type="button" className={soundEnabled ? "active" : ""} aria-pressed={soundEnabled} onClick={toggleSound}>
+                    <span aria-hidden="true">◖))</span><b>遊戲音效</b><small>{soundEnabled ? "開啟" : "關閉"}</small>
+                  </button>
+                </div>
+              </section>
               <section className="record-transfer" aria-label="遊戲紀錄備份">
+                <h3>遊戲紀錄與下載</h3>
+                <p className="record-description">備份檔會同時保存進度與排行榜；匯入時會取代這台瀏覽器的現有紀錄。</p>
                 <div>
                   <button
                     type="button"
@@ -1261,7 +1441,7 @@ export default function Home() {
             </div>
           </div>
         )}
-        <footer className="menu-footer">寫實牌面與鬼面為本站原創素材・不使用商業遊戲圖像</footer>
+        <footer className="menu-footer">牌面、鬼面與程式合成音訊皆為本站原創・不使用商業遊戲素材</footer>
       </main>
     );
   }

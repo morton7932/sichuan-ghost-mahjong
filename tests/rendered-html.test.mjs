@@ -128,6 +128,27 @@ test("rewards distant matches and occupied diagonal crossings", async () => {
   assert.equal(calculateMatchReward(board, 11, 12, 10).seconds, 4);
 });
 
+test("uses lightweight original procedural audio with persisted independent controls", async () => {
+  const [source, css] = await Promise.all([
+    readFile(pageUrl, "utf8"),
+    readFile(cssUrl, "utf8"),
+  ]);
+
+  assert.match(source, /const AUDIO_SETTINGS_KEY = "sichuan-ghost-audio-v1"/);
+  assert.match(source, /new AudioContext\(\{ latencyHint: "interactive" \}\)/);
+  assert.match(source, /const BGM_NOTES = \[/);
+  assert.match(source, /window\.setInterval\(playBackgroundMusicStep, 620\)/);
+  assert.match(source, /document\.addEventListener\("visibilitychange", syncVisibility\)/);
+  assert.match(source, /playSoundEffect\(reward\.seconds > 4 \? "bonus" : "match"\)/);
+  assert.match(source, /aria-pressed=\{musicEnabled\}/);
+  assert.match(source, /aria-pressed=\{soundEnabled\}/);
+  assert.match(source, /背景音樂/);
+  assert.match(source, /遊戲音效/);
+  assert.match(source, /設定與資料/);
+  assert.match(css, /\.audio-toggle-grid/);
+  assert.doesNotMatch(source, /\.(?:mp3|ogg|wav|m4a)/i);
+});
+
 test("includes the cockatoo one-bamboo pair and excludes flower tiles", async () => {
   const [source, css, tileFiles] = await Promise.all([
     readFile(pageUrl, "utf8"),
@@ -192,7 +213,7 @@ test("offers scored board-size difficulties and lightweight match effects", asyn
   assert.match(source, /difficulty: DifficultyId/);
   assert.match(source, /className="match-path-core"/);
   assert.match(source, /const path = findMatchPath\(board, selected, index, boardRows, boardCols\)/);
-  assert.match(source, /const GAME_VERSION = "1\.2\.0"/);
+  assert.match(source, /const GAME_VERSION = "1\.3\.0"/);
   assert.match(source, /className="menu-version">版本 v\{GAME_VERSION\}/);
   assert.match(source, /className="menu-seal" role="img" aria-label="一索鸚鵡"/);
   assert.match(css, /\.tile\.selected::after/);
@@ -228,7 +249,7 @@ test("backs up progress and rankings and supports immediate score settlement", a
   assert.match(source, /讀取進度會沿用存檔原本的難度/);
   assert.match(css, /\.new-game-card/);
   assert.match(source, /showDataTools/);
-  assert.match(source, /資料與下載/);
+  assert.match(source, /設定與資料/);
   assert.match(source, /entry\.difficulty \? difficultyById\(entry\.difficulty\)\.label : "\?"/);
   assert.match(css, /\.data-tools-card/);
   assert.match(source, /occupiedBoardOffset/);
