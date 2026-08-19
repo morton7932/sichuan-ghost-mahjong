@@ -35,6 +35,28 @@ test("keeps the ghost trigger and roulette timing rules", async () => {
   assert.equal((activateA.match(/triggerGhostEffect\(next\)/g) ?? []).length, 1);
 });
 
+test("moves directional ghost effects without reshuffling the tiles", async () => {
+  const source = await readFile(pageUrl, "utf8");
+  const movement = source.slice(
+    source.indexOf("function moveTilesToward"),
+    source.indexOf("function splitRemaining"),
+  );
+  const ghostEffects = source.slice(
+    source.indexOf("function applyGhostEffect"),
+    source.indexOf("function shuffleOccupied"),
+  );
+
+  assert.doesNotMatch(movement, /shuffled\(/);
+  assert.match(movement, /pattern === "up" \|\| pattern === "down"/);
+  assert.match(movement, /pattern === "left" \|\| pattern === "right"/);
+  assert.match(movement, /distanceFromCenter/);
+  assert.match(ghostEffects, /moveTilesToward\(board, pattern, boardRows, boardCols\)/);
+  assert.match(ghostEffects, /effect === "smile"[\s\S]*arrangeVeryEasy/);
+  assert.match(ghostEffects, /effect === "angry"[\s\S]*buildBoard/);
+  assert.match(ghostEffects, /effect === "horizontal"[\s\S]*splitRemaining/);
+  assert.match(ghostEffects, /effect === "vertical"[\s\S]*splitRemaining/);
+});
+
 test("includes the cockatoo one-bamboo pair and excludes flower tiles", async () => {
   const [source, css, tileFiles] = await Promise.all([
     readFile(pageUrl, "utf8"),
@@ -99,7 +121,7 @@ test("offers scored board-size difficulties and lightweight match effects", asyn
   assert.match(source, /difficulty: DifficultyId/);
   assert.match(source, /className="match-path-core"/);
   assert.match(source, /findTwoTurnPath\(visualBoard, visualIndexes\[0\], visualIndexes\[1\], visualRows, visualCols\)/);
-  assert.match(source, /const GAME_VERSION = "1\.1\.2"/);
+  assert.match(source, /const GAME_VERSION = "1\.1\.3"/);
   assert.match(source, /className="menu-version">版本 v\{GAME_VERSION\}/);
   assert.match(source, /className="menu-seal" role="img" aria-label="一索鸚鵡"/);
   assert.match(css, /\.tile\.selected::after/);
