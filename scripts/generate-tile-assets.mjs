@@ -68,7 +68,7 @@ const bamboo = ([x, y, scale = 1, rotation = 0], index, total) => {
 };
 
 for (let n = 1; n <= 9; n += 1) {
-  const man = `${label(n, "萬", colors.red)}<text x="80" y="115" text-anchor="middle" font-family="Noto Serif TC,Songti TC,serif" font-size="78" font-weight="900" fill="${colors.ink}">${numerals[n - 1]}</text><text x="80" y="174" text-anchor="middle" font-family="Noto Serif TC,Songti TC,serif" font-size="45" font-weight="900" fill="${colors.red}">萬</text>`;
+  const man = `${label(n, "萬", colors.red)}<text x="80" y="112" text-anchor="middle" font-family="Noto Serif TC,Songti TC,serif" font-size="58" font-weight="900" fill="${colors.ink}">${numerals[n - 1]}</text><text x="80" y="176" text-anchor="middle" font-family="Noto Serif TC,Songti TC,serif" font-size="58" font-weight="900" fill="${colors.red}">萬</text>`;
   await writeFile(join(out, `Man${n}.svg`), svg(man));
 
   const pips = pipLayouts[n].map((entry, index) => pip(entry, index, n)).join("");

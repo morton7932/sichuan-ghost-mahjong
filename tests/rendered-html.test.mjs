@@ -75,7 +75,7 @@ test("uses the familiar seven-dot layout and clear segmented bamboo", async () =
   assert.match(eightBamboo, /rotate\(-45\)/);
   assert.equal((eightBamboo.match(/fill="#15568a"/g) ?? []).length, 0);
   assert.equal((nineBamboo.match(/fill="#b52227"/g) ?? []).length, 9);
-  assert.match(oneCharacter, /font-size="78"[\s\S]*font-size="45"/);
+  assert.match(oneCharacter, /font-size="58"[\s\S]*font-size="58"/);
 });
 
 test("offers scored board-size difficulties and lightweight match effects", async () => {
@@ -112,5 +112,11 @@ test("backs up progress and rankings and supports immediate score settlement", a
   assert.match(css, /\.record-transfer/);
   assert.match(css, /\.settle-button/);
   assert.match(source, /const START_TIME = 240/);
+  assert.match(source, /const BOARD_MARGIN = 1/);
+  assert.match(source, /const GHOST_GAP = 1/);
+  assert.match(source, /row === centerRow/);
+  assert.match(source, /col === centerCol/);
+  assert.doesNotMatch(source, /setTimeout\(enterNextLevel/);
+  assert.match(source, /準備好再繼續/);
   assert.match(css, /\.tile-suo:not\(\.suo-1\) \.tile-art/);
 });
