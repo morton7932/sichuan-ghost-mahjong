@@ -9,8 +9,10 @@ const releaseUrl = new URL("../release/sichuan-ghost-mahjong/index.html", import
 test("builds a self-contained playable release", async () => {
   const html = await readFile(releaseUrl, "utf8");
 
-  assert.match(html, /<title>四川・鬼面局（離線版）<\/title>/);
-  assert.match(html, /四川・鬼面局/);
+  assert.match(html, /<title>四川省-蔡小白<\/title>/);
+  assert.match(html, /四川省-蔡小白/);
+  assert.doesNotMatch(html, /SICHUAN MAHJONG/);
+  assert.doesNotMatch(html, /離線版/);
   assert.match(html, /offline-download/);
   assert.match(html, /sichuan-ghost-mahjong-offline\.zip/);
   assert.match(html, /cockatoo-sou1\.png/);
@@ -90,7 +92,10 @@ test("offers scored board-size difficulties and lightweight match effects", asyn
   assert.match(source, /id: "expert"[\s\S]*rows: 10, cols: 14[\s\S]*multiplier: 1\.75/);
   assert.match(source, /difficulty: DifficultyId/);
   assert.match(source, /className="match-path-core"/);
-  assert.match(source, /findTwoTurnPath/);
+  assert.match(source, /findTwoTurnPath\(visualBoard, visualIndexes\[0\], visualIndexes\[1\], visualRows, visualCols\)/);
+  assert.match(source, /const GAME_VERSION = "1\.1\.0"/);
+  assert.match(source, /className="menu-version">版本 v\{GAME_VERSION\}/);
+  assert.match(source, /className="menu-seal" role="img" aria-label="一索鸚鵡"/);
   assert.match(css, /\.tile\.selected::after/);
   assert.match(css, /@keyframes tile-match/);
   assert.match(css, /@keyframes path-draw/);
@@ -124,13 +129,15 @@ test("backs up progress and rankings and supports immediate score settlement", a
   assert.match(source, /讀取進度會沿用存檔原本的難度/);
   assert.match(css, /\.new-game-card/);
   assert.match(source, /showDataTools/);
-  assert.match(source, /資料與離線版/);
+  assert.match(source, /資料與下載/);
   assert.match(source, /entry\.difficulty \? difficultyById\(entry\.difficulty\)\.label : "\?"/);
   assert.match(css, /\.data-tools-card/);
   assert.match(source, /occupiedBoardOffset/);
   assert.match(source, /compactBoard/);
   assert.match(source, /compactOrder/);
   assert.match(source, /remaining >= previousRemainingRef\.current/);
+  assert.match(source, /if \(matchEffect\.diagonal\) return endpoints/);
+  assert.match(source, /findTwoTurnPath\(visualBoard, visualIndexes\[0\], visualIndexes\[1\], visualRows, visualCols\)/);
   assert.match(source, /matchMedia\("\(max-width: 620px\)"\)/);
   assert.match(css, /translate: var\(--cell-offset-x,0\) var\(--cell-offset-y,0\)/);
   assert.match(css, /\.tile-suo:not\(\.suo-1\) \.tile-art/);
