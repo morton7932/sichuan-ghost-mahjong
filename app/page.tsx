@@ -3,7 +3,7 @@
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const START_TIME = 240;
-const GAME_VERSION = "1.1.3";
+const GAME_VERSION = "1.1.4";
 const BOARD_MARGIN = 1;
 const GHOST_GAP = 1;
 
@@ -600,7 +600,6 @@ export default function Home() {
   const [showNewGameSetup, setShowNewGameSetup] = useState(false);
   const [showDataTools, setShowDataTools] = useState(false);
   const [compactBoard, setCompactBoard] = useState(false);
-  const [compactOrder, setCompactOrder] = useState<number[]>([]);
   const [boardOffset, setBoardOffset] = useState<PathPoint>({ row: 0.5, col: 0.5 });
   const [levelBonus, setLevelBonus] = useState(0);
   const [ghostDraw, setGhostDraw] = useState<GhostDraw | null>(null);
@@ -616,34 +615,25 @@ export default function Home() {
   const visualEntries = useMemo(() => {
     const entries = board.map((tile, index) => ({ tile, index, visualIndex: index }));
     if (!compactBoard) return entries;
-    return Array.from({ length: rows * cols }, (_, visualIndex) => {
-      const index = compactOrder[visualIndex];
-      return {
-        tile: index === undefined ? null : board[index],
-        index: index ?? -(visualIndex + 1),
-        visualIndex,
-      };
-    });
-  }, [board, cols, compactBoard, compactOrder, rows]);
-  const visualCols = compactBoard ? cols : boardCols;
-  const visualRows = compactBoard ? rows : boardRows;
+    const compactEntries: { tile: Tile | null; index: number; visualIndex: number }[] = [];
+    const compactCols = boardCols - BOARD_MARGIN * 2;
+    for (let row = BOARD_MARGIN; row < boardRows - BOARD_MARGIN; row += 1) {
+      for (let col = BOARD_MARGIN; col < boardCols - BOARD_MARGIN; col += 1) {
+        const index = row * boardCols + col;
+        const visualIndex = (row - BOARD_MARGIN) * compactCols + col - BOARD_MARGIN;
+        compactEntries.push({ tile: board[index], index, visualIndex });
+      }
+    }
+    return compactEntries;
+  }, [board, boardCols, boardRows, compactBoard]);
+  const visualCols = compactBoard ? boardCols - BOARD_MARGIN * 2 : boardCols;
+  const visualRows = compactBoard ? boardRows - BOARD_MARGIN * 2 : boardRows;
   const displayedMatchPath = useMemo(() => {
     if (!matchEffect) return [];
-    if (!compactBoard) {
-      return matchEffect.path.map((point) => ({ row: point.row + boardOffset.row, col: point.col + boardOffset.col }));
-    }
-    const endpoints = matchEffect.indexes.map((originalIndex) => {
-      const visualIndex = compactOrder.indexOf(originalIndex);
-      return { row: Math.floor(visualIndex / visualCols) + 0.5, col: visualIndex % visualCols + 0.5 };
-    });
-    if (matchEffect.diagonal) return endpoints;
-    const visualIndexes = matchEffect.indexes.map((originalIndex) => compactOrder.indexOf(originalIndex)) as [number, number];
-    const visualBoard = Array.from({ length: visualRows * visualCols }, (_, visualIndex) => {
-      const originalIndex = compactOrder[visualIndex];
-      return originalIndex === undefined ? null : board[originalIndex];
-    });
-    return findTwoTurnPath(visualBoard, visualIndexes[0], visualIndexes[1], visualRows, visualCols) ?? endpoints;
-  }, [board, boardOffset, compactBoard, compactOrder, matchEffect, visualCols, visualRows]);
+    return matchEffect.path.map((point) => compactBoard
+      ? { row: point.row - BOARD_MARGIN, col: point.col - BOARD_MARGIN }
+      : { row: point.row + boardOffset.row, col: point.col + boardOffset.col });
+  }, [boardOffset, compactBoard, matchEffect]);
   const progress = ((rows * cols - remaining) / (rows * cols)) * 100;
   const inputLocked = phase !== "playing" || matchEffect !== null || clearingIndexes.length > 0;
   const awardPoints = useCallback((base: number) => Math.round(base * multiplier), [multiplier]);
@@ -662,7 +652,6 @@ export default function Home() {
     const layoutChanged = remaining >= previousRemainingRef.current || board.length !== previousBoardLengthRef.current;
     if (layoutChanged) {
       setBoardOffset(occupiedBoardOffset(board, boardRows, boardCols));
-      setCompactOrder(board.flatMap((tile, index) => tile ? [index] : []));
     }
     previousRemainingRef.current = remaining;
     previousBoardLengthRef.current = board.length;
