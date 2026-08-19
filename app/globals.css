@@ -18,7 +18,7 @@ button { font: inherit; }
 .menu-card::before,.menu-card::after { content: ""; position: absolute; width: 32px; height: 32px; border-color: var(--gold); opacity: .65; }
 .menu-card::before { top: 10px; left: 10px; border-top: 1px solid; border-left: 1px solid; }.menu-card::after { right: 10px; bottom: 10px; border-right: 1px solid; border-bottom: 1px solid; }
 .menu-brand { text-align: center; }
-.menu-seal { display: grid; place-items: center; width: 84px; height: 84px; margin: 0 auto 13px; overflow: hidden; border: 1px solid rgba(214,175,89,.72); border-radius: 50%; background: radial-gradient(circle at 50% 38%,#f8f1db 0 51%,#e2c984 75%,#92702e 100%); box-shadow: inset 0 0 0 4px rgba(255,248,215,.22),0 8px 24px rgba(0,0,0,.28); }
+.menu-seal { display: grid; place-items: center; width: 84px; height: 84px; margin: 0 auto 13px; overflow: hidden; border: 1px solid rgba(235,200,112,.82); border-radius: 50%; background: radial-gradient(circle at 50% 35%,#268064 0 48%,#0c523f 72%,#06362d 100%); box-shadow: inset 0 0 0 4px rgba(255,231,159,.12),0 8px 24px rgba(0,0,0,.34); }
 .menu-seal::before { content: ""; width: 92%; height: 92%; background: url("/art/cockatoo-sou1.png") 50% 54%/contain no-repeat; filter: drop-shadow(0 4px 3px rgba(22,42,32,.28)); }
 .menu-version { display: block; color: #bfa768; font: 600 10px/1 "Noto Sans TC","Microsoft JhengHei",sans-serif; letter-spacing: .16em; }
 .menu-brand h1 { margin: 8px 0 5px; color: #fff3cf; font-size: clamp(30px,7vw,47px); letter-spacing: .13em; }
@@ -100,6 +100,7 @@ button { font: inherit; }
 .board { --board-gap: clamp(3px,.45vw,7px); position: relative; z-index: 2; display: grid; grid-template-columns: repeat(var(--board-cols,12),minmax(0,1fr)); gap: var(--board-gap); margin: auto; width: 100%; max-width: var(--board-max-width,1080px); animation: board-enter .34s ease-out; }
 .cell { aspect-ratio: .76; min-width: 0; translate: var(--cell-offset-x,0) var(--cell-offset-y,0); }
 .tile { position: relative; width: 100%; height: 100%; min-width: 0; padding: 0; border: 1px solid #c8b991; border-radius: clamp(3px,.5vw,7px); color: var(--ink); cursor: pointer; overflow: hidden; background: #f5ecd2 url("/art/mahjong-tile-base-v2.png") center/100% 100% no-repeat; box-shadow: 0 3px 0 #9c8557,0 6px 8px rgba(0,0,0,.36),inset 1px 1px 0 #fff; transition: transform .14s ease,filter .14s ease,box-shadow .14s ease; -webkit-tap-highlight-color: transparent; }
+.tile-placeholder { visibility: hidden; pointer-events: none; }
 .tile::after { content: ""; position: absolute; z-index: 5; inset: 1px; border-radius: inherit; opacity: 0; pointer-events: none; background: linear-gradient(145deg,rgba(255,226,124,.12),rgba(224,153,38,.3)); box-shadow: inset 0 0 0 2px rgba(255,225,128,.55); transition: opacity .14s ease; }
 .tile:hover { transform: translateY(-3px); filter: brightness(1.06); }
 .tile.selected { z-index: 4; transform: translateY(-7px); filter: brightness(1.09) saturate(1.16); box-shadow: 0 3px 0 #9c8557,0 0 0 3px #ffd66b,0 10px 14px rgba(0,0,0,.4); }
