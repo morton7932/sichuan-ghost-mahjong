@@ -35,24 +35,25 @@ const pip = ([x, y, scale = 1], index, total) => {
 
 const bambooLayouts = {
   1: [[80, 111, 1.45]],
-  2: [[57, 111], [103, 111]],
-  3: [[52, 67], [80, 112], [108, 157]],
-  4: [[56, 77], [104, 77], [56, 149], [104, 149]],
-  5: [[54, 68], [106, 68], [80, 112], [54, 160], [106, 160]],
+  // 二索是同一中線的上下直排，而不是左右並排。
+  2: [[80, 76], [80, 148]],
+  3: [[52, 65], [80, 112], [108, 159]],
+  4: [[56, 74], [104, 74], [56, 150], [104, 150]],
+  5: [[54, 68], [106, 68], [80, 112], [54, 158], [106, 158]],
   6: [[55, 58], [105, 58], [55, 112], [105, 112], [55, 166], [105, 166]],
-  7: [[49, 49], [80, 79], [111, 109], [55, 145], [105, 145], [55, 181], [105, 181]],
+  7: [[50, 52], [80, 80], [110, 108], [55, 146], [105, 146], [55, 180], [105, 180]],
   // 八索採傳統上下對稱的交叉式排列，外側直立、內側斜向相接。
   8: [[46, 68], [72, 89, 1, 45], [88, 89, 1, -45], [114, 68], [46, 157], [72, 136, 1, -45], [88, 136, 1, 45], [114, 157]],
-  9: [[46, 55], [80, 55], [114, 55], [46, 112], [80, 112], [114, 112], [46, 169], [80, 169], [114, 169]],
+  9: [[48, 58], [80, 58], [112, 58], [48, 112], [80, 112], [112, 112], [48, 166], [80, 166], [112, 166]],
 };
 
 const bambooColor = (total, index) => {
   if (total === 3) return [colors.blue, colors.red, colors.green][index];
   if (total === 5 && index === 2) return colors.red;
+  if (total === 6 && [2, 3].includes(index)) return colors.red;
   if (total === 7 && index === 1) return colors.red;
-  if (total === 8) return [0, 3, 4, 7].includes(index) ? colors.green : colors.blue;
-  if (total === 9) return [colors.blue, colors.green, colors.red][Math.floor(index / 3)];
-  return index % 2 === 0 ? colors.green : colors.blue;
+  if (total === 9 && index % 3 === 1) return colors.red;
+  return colors.green;
 };
 
 const bamboo = ([x, y, scale = 1, rotation = 0], index, total) => {
@@ -67,7 +68,7 @@ const bamboo = ([x, y, scale = 1, rotation = 0], index, total) => {
 };
 
 for (let n = 1; n <= 9; n += 1) {
-  const man = `${label(n, "萬", colors.red)}<text x="80" y="111" text-anchor="middle" font-family="Noto Serif TC,Songti TC,serif" font-size="69" font-weight="900" fill="${colors.ink}">${numerals[n - 1]}</text><text x="80" y="176" text-anchor="middle" font-family="Noto Serif TC,Songti TC,serif" font-size="55" font-weight="900" fill="${colors.red}">萬</text>`;
+  const man = `${label(n, "萬", colors.red)}<text x="80" y="115" text-anchor="middle" font-family="Noto Serif TC,Songti TC,serif" font-size="78" font-weight="900" fill="${colors.ink}">${numerals[n - 1]}</text><text x="80" y="174" text-anchor="middle" font-family="Noto Serif TC,Songti TC,serif" font-size="45" font-weight="900" fill="${colors.red}">萬</text>`;
   await writeFile(join(out, `Man${n}.svg`), svg(man));
 
   const pips = pipLayouts[n].map((entry, index) => pip(entry, index, n)).join("");
