@@ -84,6 +84,7 @@ test("offers scored board-size difficulties and lightweight match effects", asyn
     readFile(cssUrl, "utf8"),
   ]);
 
+  assert.match(source, /id: "casual"[\s\S]*rows: 6, cols: 8[\s\S]*multiplier: 0\.8/);
   assert.match(source, /id: "beginner"[\s\S]*rows: 8, cols: 10[\s\S]*multiplier: 1/);
   assert.match(source, /id: "standard"[\s\S]*rows: 8, cols: 12[\s\S]*multiplier: 1\.35/);
   assert.match(source, /id: "expert"[\s\S]*rows: 10, cols: 14[\s\S]*multiplier: 1\.75/);
@@ -126,5 +127,9 @@ test("backs up progress and rankings and supports immediate score settlement", a
   assert.match(source, /資料與離線版/);
   assert.match(source, /entry\.difficulty \? difficultyById\(entry\.difficulty\)\.label : "\?"/);
   assert.match(css, /\.data-tools-card/);
+  assert.match(source, /occupiedBoardOffset/);
+  assert.match(source, /compactBoard/);
+  assert.match(source, /matchMedia\("\(max-width: 620px\)"\)/);
+  assert.match(css, /translate: var\(--cell-offset-x,0\) var\(--cell-offset-y,0\)/);
   assert.match(css, /\.tile-suo:not\(\.suo-1\) \.tile-art/);
 });
