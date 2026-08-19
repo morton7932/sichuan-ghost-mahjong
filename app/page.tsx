@@ -3,7 +3,7 @@
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const START_TIME = 240;
-const GAME_VERSION = "1.1.1";
+const GAME_VERSION = "1.1.2";
 const BOARD_MARGIN = 1;
 const GHOST_GAP = 1;
 
@@ -186,17 +186,16 @@ function makeTile(base: Omit<Tile, "uid">, suffix: string, random = Math.random)
   return { ...base, uid: `${base.kind}-${suffix}-${random().toString(36).slice(2, 8)}` };
 }
 
-function buildBoard(level: number, difficultyId: DifficultyId, includeGhosts = true, random = Math.random): (Tile | null)[] {
+function buildBoard(level: number, difficultyId: DifficultyId, random = Math.random): (Tile | null)[] {
   const { rows, cols } = difficultyById(difficultyId);
   const pairCount = rows * cols / 2;
   const bases: Omit<Tile, "uid">[] = [];
-  const normalPairCount = pairCount - (includeGhosts ? 2 : 0);
+  const normalPairCount = pairCount - 2;
   const guaranteedSouOne = normalKinds.find((tile) => tile.kind === "suo-1")!;
-  bases.push(guaranteedSouOne);
-  for (let i = 1; i < normalPairCount; i += 1) {
-    bases.push(normalKinds[Math.floor(random() * normalKinds.length)]);
-  }
-  if (includeGhosts) bases.push(ghostKind, ghostKind);
+  const normalPairPool = normalKinds.flatMap((base) => [base, base]);
+  normalPairPool.splice(normalPairPool.findIndex((base) => base.kind === guaranteedSouOne.kind), 1);
+  bases.push(guaranteedSouOne, ...shuffled(normalPairPool, random).slice(0, normalPairCount - 1));
+  bases.push(ghostKind, ghostKind);
   const ordered = shuffled(bases, random);
   const anchor = ordered[0];
   const remaining = shuffled(ordered.slice(1).flatMap((base, pairIndex) => [
@@ -446,7 +445,7 @@ function applyGhostEffect(effect: GhostEffectId, board: (Tile | null)[], level: 
   const { rows, cols } = difficultyById(difficultyId);
   const { rows: boardRows, cols: boardCols } = boardDimensions(rows, cols);
   if (effect === "smile") return { board: arrangeVeryEasy(board, boardRows, boardCols), bonus: 0, name: "笑臉：牌局變得容易" };
-  if (effect === "angry") return { board: buildBoard(level, difficultyId, false), bonus: 32, name: "生氣：重新塞滿牌桌" };
+  if (effect === "angry") return { board: buildBoard(level, difficultyId), bonus: 32, name: "生氣：重新塞滿牌桌" };
   if (effect === "horizontal") return { board: splitRemaining(board, "horizontal", boardRows, boardCols), bonus: 0, name: "上下分邊" };
   if (effect === "vertical") return { board: splitRemaining(board, "vertical", boardRows, boardCols), bonus: 0, name: "左右分邊" };
   const pattern = effect as "up" | "down" | "left" | "right" | "in" | "out";
@@ -570,7 +569,7 @@ export default function Home() {
   const [level, setLevel] = useState(1);
   const [time, setTime] = useState(START_TIME);
   const [score, setScore] = useState(0);
-  const [board, setBoard] = useState<(Tile | null)[]>(() => buildBoard(1, DEFAULT_DIFFICULTY, true, seededRandom(314159)));
+  const [board, setBoard] = useState<(Tile | null)[]>(() => buildBoard(1, DEFAULT_DIFFICULTY, seededRandom(314159)));
   const [selected, setSelected] = useState<number | null>(null);
   const [rejectedIndex, setRejectedIndex] = useState<number | null>(null);
   const [matchEffect, setMatchEffect] = useState<MatchEffect | null>(null);

@@ -43,6 +43,12 @@ test("includes the cockatoo one-bamboo pair and excludes flower tiles", async ()
   ]);
 
   assert.match(source, /guaranteedSouOne/);
+  assert.match(source, /normalKinds\.flatMap\(\(base\) => \[base, base\]\)/);
+  assert.match(source, /normalPairPool\.splice/);
+  assert.match(source, /slice\(0, normalPairCount - 1\)/);
+  assert.doesNotMatch(source, /normalKinds\[Math\.floor\(random\(\) \* normalKinds\.length\)\]/);
+  assert.match(source, /effect === "angry"[\s\S]*buildBoard\(level, difficultyId\)/);
+  assert.doesNotMatch(source, /buildBoard\(level, difficultyId, false\)/);
   assert.match(source, /tile\.kind === "suo-1"/);
   assert.doesNotMatch(source, /tile-fallback/);
   assert.doesNotMatch(css, /tile-fallback/);
@@ -93,7 +99,7 @@ test("offers scored board-size difficulties and lightweight match effects", asyn
   assert.match(source, /difficulty: DifficultyId/);
   assert.match(source, /className="match-path-core"/);
   assert.match(source, /findTwoTurnPath\(visualBoard, visualIndexes\[0\], visualIndexes\[1\], visualRows, visualCols\)/);
-  assert.match(source, /const GAME_VERSION = "1\.1\.1"/);
+  assert.match(source, /const GAME_VERSION = "1\.1\.2"/);
   assert.match(source, /className="menu-version">版本 v\{GAME_VERSION\}/);
   assert.match(source, /className="menu-seal" role="img" aria-label="一索鸚鵡"/);
   assert.match(css, /\.tile\.selected::after/);
