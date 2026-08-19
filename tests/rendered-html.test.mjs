@@ -93,7 +93,7 @@ test("offers scored board-size difficulties and lightweight match effects", asyn
   assert.match(source, /difficulty: DifficultyId/);
   assert.match(source, /className="match-path-core"/);
   assert.match(source, /findTwoTurnPath\(visualBoard, visualIndexes\[0\], visualIndexes\[1\], visualRows, visualCols\)/);
-  assert.match(source, /const GAME_VERSION = "1\.1\.0"/);
+  assert.match(source, /const GAME_VERSION = "1\.1\.1"/);
   assert.match(source, /className="menu-version">版本 v\{GAME_VERSION\}/);
   assert.match(source, /className="menu-seal" role="img" aria-label="一索鸚鵡"/);
   assert.match(css, /\.tile\.selected::after/);
@@ -135,6 +135,11 @@ test("backs up progress and rankings and supports immediate score settlement", a
   assert.match(source, /occupiedBoardOffset/);
   assert.match(source, /compactBoard/);
   assert.match(source, /compactOrder/);
+  assert.match(source, /Array\.from\(\{ length: rows \* cols \}/);
+  assert.match(source, /const visualRows = compactBoard \? rows : boardRows/);
+  assert.match(source, /Array\.from\(\{ length: visualRows \* visualCols \}/);
+  assert.match(source, /compactBoard \? <button type="button" className="tile tile-placeholder" disabled/);
+  assert.match(css, /\.tile-placeholder \{[^}]*visibility: hidden/);
   assert.match(source, /remaining >= previousRemainingRef\.current/);
   assert.match(source, /if \(matchEffect\.diagonal\) return endpoints/);
   assert.match(source, /findTwoTurnPath\(visualBoard, visualIndexes\[0\], visualIndexes\[1\], visualRows, visualCols\)/);

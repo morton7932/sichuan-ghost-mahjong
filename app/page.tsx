@@ -3,7 +3,7 @@
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const START_TIME = 240;
-const GAME_VERSION = "1.1.0";
+const GAME_VERSION = "1.1.1";
 const BOARD_MARGIN = 1;
 const GHOST_GAP = 1;
 
@@ -598,10 +598,17 @@ export default function Home() {
   const visualEntries = useMemo(() => {
     const entries = board.map((tile, index) => ({ tile, index, visualIndex: index }));
     if (!compactBoard) return entries;
-    return compactOrder.map((index, visualIndex) => ({ tile: board[index], index, visualIndex }));
-  }, [board, compactBoard, compactOrder]);
+    return Array.from({ length: rows * cols }, (_, visualIndex) => {
+      const index = compactOrder[visualIndex];
+      return {
+        tile: index === undefined ? null : board[index],
+        index: index ?? -(visualIndex + 1),
+        visualIndex,
+      };
+    });
+  }, [board, cols, compactBoard, compactOrder, rows]);
   const visualCols = compactBoard ? cols : boardCols;
-  const visualRows = compactBoard ? Math.max(1, Math.ceil(compactOrder.length / visualCols)) : boardRows;
+  const visualRows = compactBoard ? rows : boardRows;
   const displayedMatchPath = useMemo(() => {
     if (!matchEffect) return [];
     if (!compactBoard) {
@@ -613,7 +620,10 @@ export default function Home() {
     });
     if (matchEffect.diagonal) return endpoints;
     const visualIndexes = matchEffect.indexes.map((originalIndex) => compactOrder.indexOf(originalIndex)) as [number, number];
-    const visualBoard = compactOrder.map((originalIndex) => board[originalIndex]);
+    const visualBoard = Array.from({ length: visualRows * visualCols }, (_, visualIndex) => {
+      const originalIndex = compactOrder[visualIndex];
+      return originalIndex === undefined ? null : board[originalIndex];
+    });
     return findTwoTurnPath(visualBoard, visualIndexes[0], visualIndexes[1], visualRows, visualCols) ?? endpoints;
   }, [board, boardOffset, compactBoard, compactOrder, matchEffect, visualCols, visualRows]);
   const progress = ((rows * cols - remaining) / (rows * cols)) * 100;
@@ -1246,7 +1256,7 @@ export default function Home() {
             >
               {visualEntries.map(({ tile, index, visualIndex }) => (
                 <div className="cell" role="gridcell" key={index}>
-                  {tile && (
+                  {tile ? (
                     <button
                       type="button"
                       className={`tile tile-${tile.group} ${selected === index ? "selected" : ""} ${rejectedIndex === index ? "rejected" : ""} ${matchEffect?.indexes.includes(index) ? "matching" : ""} ${clearingIndexes.includes(index) ? "clearing" : ""} ${tile.kind}`}
@@ -1266,7 +1276,7 @@ export default function Home() {
                         <><span className="tile-corner">{tile.corner}</span><span className="tile-face">{tile.face}</span><span className="tile-suit">{tile.corner}</span></>
                       )}
                     </button>
-                  )}
+                  ) : compactBoard ? <button type="button" className="tile tile-placeholder" disabled aria-hidden="true" tabIndex={-1} /> : null}
                 </div>
               ))}
               {matchEffect && (
