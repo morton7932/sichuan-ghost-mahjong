@@ -3,7 +3,7 @@
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const START_TIME = 240;
-const GAME_VERSION = "1.1.5";
+const GAME_VERSION = "1.2.0";
 const BOARD_MARGIN = 1;
 const GHOST_GAP = 1;
 
@@ -94,6 +94,13 @@ type MatchEffect = {
   indexes: [number, number];
   path: PathPoint[];
   diagonal: boolean;
+};
+type MatchReward = {
+  seconds: number;
+  distanceBonus: number;
+  crossedTiles: number;
+  crossedBonus: number;
+  bonusPoints: number;
 };
 type SaveData = {
   version: 2;
@@ -223,6 +230,37 @@ function isDiagonalMatch(a: number, b: number, cols: number): boolean {
   // 本作的特色規則：只要兩張相同牌位於同一條 45° 斜線，
   // 即使斜線中間還有其他牌，也可以直接遠距對消。
   return Math.abs(dr) === Math.abs(dc) && dr !== 0;
+}
+
+function calculateMatchReward(board: (Tile | null)[], a: number, b: number, cols: number): MatchReward {
+  const ar = Math.floor(a / cols);
+  const ac = a % cols;
+  const br = Math.floor(b / cols);
+  const bc = b % cols;
+  const rowDistance = Math.abs(br - ar);
+  const colDistance = Math.abs(bc - ac);
+  const distance = Math.max(rowDistance, colDistance);
+  const distanceBonus = distance >= 7 ? 3 : distance >= 5 ? 2 : distance >= 3 ? 1 : 0;
+  let crossedTiles = 0;
+
+  if (isDiagonalMatch(a, b, cols)) {
+    const rowStep = Math.sign(br - ar);
+    const colStep = Math.sign(bc - ac);
+    for (let step = 1; step < distance; step += 1) {
+      const between = (ar + rowStep * step) * cols + ac + colStep * step;
+      if (board[between]) crossedTiles += 1;
+    }
+  }
+
+  const crossedBonus = Math.min(crossedTiles, 3);
+  const bonusSeconds = distanceBonus + crossedBonus;
+  return {
+    seconds: 4 + bonusSeconds,
+    distanceBonus,
+    crossedTiles,
+    crossedBonus,
+    bonusPoints: bonusSeconds * 25,
+  };
 }
 
 function compressPath(points: [number, number][]): [number, number][] {
@@ -594,6 +632,7 @@ export default function Home() {
   const [matchEffect, setMatchEffect] = useState<MatchEffect | null>(null);
   const [clearingIndexes, setClearingIndexes] = useState<number[]>([]);
   const [timeGainPulse, setTimeGainPulse] = useState(0);
+  const [lastTimeGain, setLastTimeGain] = useState(4);
   const [phase, setPhase] = useState<Phase>("playing");
   const [message, setMessage] = useState("牌局開始：找出第一對牌吧");
   const [showRules, setShowRules] = useState(false);
@@ -941,15 +980,23 @@ export default function Home() {
     next[selected] = null;
     next[index] = null;
     const diagonal = isDiagonalMatch(selected, index, boardCols);
+    const reward = calculateMatchReward(board, selected, index, boardCols);
+    const skillPoints = awardPoints(reward.bonusPoints);
     const token = animationTokenRef.current + 1;
     animationTokenRef.current = token;
     setSelected(null);
     setRejectedIndex(null);
     setMatchEffect({ indexes: [selected, index], path, diagonal });
-    setScore((current) => current + awardPoints(matched.group === "ghost" ? 500 : 100));
-    setTime((current) => current + 4);
+    setScore((current) => current + awardPoints(matched.group === "ghost" ? 500 : 100) + skillPoints);
+    setTime((current) => current + reward.seconds);
+    setLastTimeGain(reward.seconds);
     setTimeGainPulse((current) => current + 1);
-    setMessage(diagonal ? "長斜線連線成立！ +4 秒" : "路徑連線成立！ +4 秒");
+    const reasons = [
+      reward.distanceBonus ? `遠距 +${reward.distanceBonus} 秒` : "",
+      reward.crossedBonus ? `穿越 ${reward.crossedTiles} 張牌 +${reward.crossedBonus} 秒` : "",
+    ].filter(Boolean);
+    const rewardDetail = reasons.length ? `（${reasons.join("、")}）` : "";
+    setMessage(`${diagonal ? "長斜線" : "路徑"}連線成立！ +${reward.seconds} 秒${rewardDetail}${skillPoints ? `・技巧獎勵 +${skillPoints} 分` : ""}`);
 
     window.setTimeout(() => {
       if (animationTokenRef.current !== token) return;
@@ -1240,7 +1287,7 @@ export default function Home() {
         <div className={`timer ${timeUrgency}`} aria-live="polite">
           <span className="timer-mark">時</span>
           <div><span>剩餘時間</span><strong>{Math.floor(time / 60)}:{String(time % 60).padStart(2, "0")}</strong></div>
-          {timeGainPulse > 0 && <b className="time-gain" key={timeGainPulse}>+4 秒</b>}
+          {timeGainPulse > 0 && <b className="time-gain" key={timeGainPulse}>+{lastTimeGain} 秒</b>}
         </div>
         <div className="hud-block hud-score"><span>得分</span><strong className="score-value" key={score}>{score.toLocaleString("zh-TW")}</strong><em>剩 {remaining / 2} 組</em></div>
       </section>
@@ -1351,7 +1398,7 @@ export default function Home() {
             <div className="rules-grid">
               <div><b>01</b><p><strong>基本對消</strong>相同牌以不超過兩次轉彎的空路相連，即可消除；盤外也算空路。</p></div>
               <div><b>02</b><p><strong>遠距斜線</strong>同一條 45° 斜線上的相同牌不受中間牌阻擋，無論多遠都能對消。</p></div>
-              <div><b>03</b><p><strong>限時連戰</strong>普通消牌 +4 秒，過關再隨機加時，所有剩餘時間帶到下一關。</p></div>
+              <div><b>03</b><p><strong>限時連戰</strong>消牌至少 +4 秒；距離越遠、斜線穿越的牌越多，時間與分數獎勵越高。過關再隨機加時。</p></div>
               <div><b>04</b><p><strong>鬼面分邊</strong>只有鬼面輪盤抽中上下或左右時，才會把每一對牌分到兩側。</p></div>
             </div>
             <div className="ghost-rules">

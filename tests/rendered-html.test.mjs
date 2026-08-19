@@ -97,6 +97,37 @@ test("moves inward and outward effects to radial slots without changing the tile
   assert.deepEqual(identities(outward), identities(board));
 });
 
+test("rewards distant matches and occupied diagonal crossings", async () => {
+  const source = await readFile(pageUrl, "utf8");
+  const rewardSource = source.slice(
+    source.indexOf("function isDiagonalMatch"),
+    source.indexOf("function compressPath"),
+  );
+  const executable = ts.transpileModule(
+    `type Tile = { uid: string }; type MatchReward = { seconds: number; distanceBonus: number; crossedTiles: number; crossedBonus: number; bonusPoints: number }; ${rewardSource}`,
+    { compilerOptions: { target: ts.ScriptTarget.ES2022 } },
+  ).outputText;
+  const calculateMatchReward = Function(`${executable}\nreturn calculateMatchReward;`)();
+  const board = Array(100).fill(null);
+  [22, 33, 44, 55].forEach((index) => { board[index] = { uid: String(index) }; });
+
+  assert.deepEqual(calculateMatchReward(board, 11, 88, 10), {
+    seconds: 10,
+    distanceBonus: 3,
+    crossedTiles: 4,
+    crossedBonus: 3,
+    bonusPoints: 150,
+  });
+  assert.deepEqual(calculateMatchReward(board, 11, 17, 10), {
+    seconds: 6,
+    distanceBonus: 2,
+    crossedTiles: 0,
+    crossedBonus: 0,
+    bonusPoints: 50,
+  });
+  assert.equal(calculateMatchReward(board, 11, 12, 10).seconds, 4);
+});
+
 test("includes the cockatoo one-bamboo pair and excludes flower tiles", async () => {
   const [source, css, tileFiles] = await Promise.all([
     readFile(pageUrl, "utf8"),
@@ -161,7 +192,7 @@ test("offers scored board-size difficulties and lightweight match effects", asyn
   assert.match(source, /difficulty: DifficultyId/);
   assert.match(source, /className="match-path-core"/);
   assert.match(source, /const path = findMatchPath\(board, selected, index, boardRows, boardCols\)/);
-  assert.match(source, /const GAME_VERSION = "1\.1\.5"/);
+  assert.match(source, /const GAME_VERSION = "1\.2\.0"/);
   assert.match(source, /className="menu-version">版本 v\{GAME_VERSION\}/);
   assert.match(source, /className="menu-seal" role="img" aria-label="一索鸚鵡"/);
   assert.match(css, /\.tile\.selected::after/);
