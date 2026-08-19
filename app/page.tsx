@@ -3,7 +3,7 @@
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const START_TIME = 240;
-const GAME_VERSION = "1.1.4";
+const GAME_VERSION = "1.1.5";
 const BOARD_MARGIN = 1;
 const GHOST_GAP = 1;
 
@@ -631,7 +631,7 @@ export default function Home() {
   const displayedMatchPath = useMemo(() => {
     if (!matchEffect) return [];
     return matchEffect.path.map((point) => compactBoard
-      ? { row: point.row - BOARD_MARGIN, col: point.col - BOARD_MARGIN }
+      ? { row: point.row - BOARD_MARGIN + boardOffset.row, col: point.col - BOARD_MARGIN + boardOffset.col }
       : { row: point.row + boardOffset.row, col: point.col + boardOffset.col });
   }, [boardOffset, compactBoard, matchEffect]);
   const progress = ((rows * cols - remaining) / (rows * cols)) * 100;
@@ -1257,8 +1257,8 @@ export default function Home() {
               style={{
                 "--board-cols": visualCols,
                 "--board-max-width": `${Math.min(1280, visualCols * 88)}px`,
-                "--cell-offset-x": compactBoard ? "0%" : `calc(${boardOffset.col * 100}% + ${boardOffset.col} * var(--board-gap))`,
-                "--cell-offset-y": compactBoard ? "0%" : `calc(${boardOffset.row * 100}% + ${boardOffset.row} * var(--board-gap))`,
+                "--cell-offset-x": `calc(${boardOffset.col * 100}% + ${boardOffset.col} * var(--board-gap))`,
+                "--cell-offset-y": `calc(${boardOffset.row * 100}% + ${boardOffset.row} * var(--board-gap))`,
               } as CSSProperties}
             >
               {visualEntries.map(({ tile, index, visualIndex }) => (
