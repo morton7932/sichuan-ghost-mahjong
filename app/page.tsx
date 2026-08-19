@@ -3,7 +3,7 @@
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const START_TIME = 240;
-const GAME_VERSION = "1.1.2";
+const GAME_VERSION = "1.1.3";
 const BOARD_MARGIN = 1;
 const GHOST_GAP = 1;
 
@@ -383,30 +383,49 @@ function arrangeVeryEasy(board: (Tile | null)[], rows: number, cols: number): (T
   return hasMove(result, rows, cols) ? result : arrangeEasy(result, rows, cols);
 }
 
-function arrangeToward(board: (Tile | null)[], pattern: "up" | "down" | "left" | "right" | "in" | "out", rows: number, cols: number): (Tile | null)[] {
-  const tiles = shuffled(board.filter(Boolean) as Tile[]);
-  const positions = innerBoardSlots(rows, cols);
-  positions.sort((a, b) => {
-    const ar = Math.floor(a / cols), ac = a % cols;
-    const br = Math.floor(b / cols), bc = b % cols;
-    if (pattern === "up") return ar - br || ac - bc;
-    if (pattern === "down") return br - ar || ac - bc;
-    if (pattern === "left") return ac - bc || ar - br;
-    if (pattern === "right") return bc - ac || ar - br;
-    const ad = Math.abs(ar - (rows - 1) / 2) + Math.abs(ac - (cols - 1) / 2);
-    const bd = Math.abs(br - (rows - 1) / 2) + Math.abs(bc - (cols - 1) / 2);
-    return pattern === "in" ? ad - bd : bd - ad;
-  });
+function distanceFromCenter(index: number, rows: number, cols: number): number {
+  const row = Math.floor(index / cols);
+  const col = index % cols;
+  return Math.abs(row - (rows - 1) / 2) + Math.abs(col - (cols - 1) / 2);
+}
+
+function moveTilesToward(board: (Tile | null)[], pattern: "up" | "down" | "left" | "right" | "in" | "out", rows: number, cols: number): (Tile | null)[] {
   const result: (Tile | null)[] = Array(rows * cols).fill(null);
-  tiles.forEach((tile, index) => { result[positions[index]] = tile; });
-  if (!hasMove(result, rows, cols)) {
-    const firstPair = groupPairIndexes(result)[0];
-    if (firstPair) {
-      const [a, b] = firstPair;
-      const adjacent = a % cols < cols - 1 ? a + 1 : a - 1;
-      [result[adjacent], result[b]] = [result[b], result[adjacent]];
+
+  if (pattern === "up" || pattern === "down") {
+    for (let col = BOARD_MARGIN; col < cols - BOARD_MARGIN; col += 1) {
+      const sources: number[] = [];
+      for (let row = BOARD_MARGIN; row < rows - BOARD_MARGIN; row += 1) {
+        const index = row * cols + col;
+        if (board[index]) sources.push(index);
+      }
+      const firstTargetRow = pattern === "up" ? BOARD_MARGIN : rows - BOARD_MARGIN - sources.length;
+      sources.forEach((source, offset) => { result[(firstTargetRow + offset) * cols + col] = board[source]; });
     }
+    return result;
   }
+
+  if (pattern === "left" || pattern === "right") {
+    for (let row = BOARD_MARGIN; row < rows - BOARD_MARGIN; row += 1) {
+      const sources: number[] = [];
+      for (let col = BOARD_MARGIN; col < cols - BOARD_MARGIN; col += 1) {
+        const index = row * cols + col;
+        if (board[index]) sources.push(index);
+      }
+      const firstTargetCol = pattern === "left" ? BOARD_MARGIN : cols - BOARD_MARGIN - sources.length;
+      sources.forEach((source, offset) => { result[row * cols + firstTargetCol + offset] = board[source]; });
+    }
+    return result;
+  }
+
+  const towardCenter = pattern === "in";
+  const compareByDistance = (a: number, b: number) => {
+    const distanceDelta = distanceFromCenter(a, rows, cols) - distanceFromCenter(b, rows, cols);
+    return (towardCenter ? distanceDelta : -distanceDelta) || a - b;
+  };
+  const sources = innerBoardSlots(rows, cols).filter((index) => board[index]).sort(compareByDistance);
+  const targets = innerBoardSlots(rows, cols).sort(compareByDistance).slice(0, sources.length);
+  sources.forEach((source, index) => { result[targets[index]] = board[source]; });
   return result;
 }
 
@@ -450,7 +469,7 @@ function applyGhostEffect(effect: GhostEffectId, board: (Tile | null)[], level: 
   if (effect === "vertical") return { board: splitRemaining(board, "vertical", boardRows, boardCols), bonus: 0, name: "左右分邊" };
   const pattern = effect as "up" | "down" | "left" | "right" | "in" | "out";
   const names = { up: "向上集中", down: "向下集中", left: "向左集中", right: "向右集中", in: "向內集中", out: "向外擴散" };
-  return { board: arrangeToward(board, pattern, boardRows, boardCols), bonus: 0, name: names[pattern] };
+  return { board: moveTilesToward(board, pattern, boardRows, boardCols), bonus: 0, name: names[pattern] };
 }
 
 function shuffleOccupied(board: (Tile | null)[]): (Tile | null)[] {
