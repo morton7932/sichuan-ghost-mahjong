@@ -3,7 +3,7 @@
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const START_TIME = 240;
-const GAME_VERSION = "1.4.1";
+const GAME_VERSION = "1.4.2";
 const BOARD_MARGIN = 1;
 const GHOST_GAP = 1;
 
@@ -285,8 +285,12 @@ const GHOST_EFFECTS: { id: GhostEffectId; label: string; detail: string; symbol:
   { id: "vertical", label: "左右", detail: "左右分邊", symbol: "↔" },
 ];
 
-function drawGhostEffectIndex(): number {
-  return Math.floor(Math.random() * GHOST_EFFECTS.length);
+function drawGhostEffectIndex(excluded: ReadonlySet<GhostEffectId> = new Set(), random = Math.random): number {
+  const available = GHOST_EFFECTS
+    .map((effect, index) => ({ effect, index }))
+    .filter(({ effect }) => !excluded.has(effect.id));
+  const candidates = available.length > 0 ? available : GHOST_EFFECTS.map((effect, index) => ({ effect, index }));
+  return candidates[Math.floor(random() * candidates.length)].index;
 }
 
 function seededRandom(seed: number) {
@@ -584,33 +588,57 @@ function moveTilesToward(board: (Tile | null)[], pattern: "up" | "down" | "left"
   return result;
 }
 
-function splitRemaining(board: (Tile | null)[], split: "horizontal" | "vertical", rows: number, cols: number): (Tile | null)[] {
-  const pairs = shuffled(groupPairIndexes(board));
-  const first: number[] = [];
-  const second: number[] = [];
+function centeredAxisValues(start: number, end: number): number[] {
+  const center = (start + end - 1) / 2;
+  return Array.from({ length: end - start }, (_, index) => start + index)
+    .sort((a, b) => Math.abs(a - center) - Math.abs(b - center) || a - b);
+}
+
+function splitSlotPairs(split: "horizontal" | "vertical", rows: number, cols: number): [number, number][] {
+  const slots: [number, number][] = [];
   const centerRow = Math.floor(rows / 2);
   const centerCol = Math.floor(cols / 2);
-  for (let row = BOARD_MARGIN; row < rows - BOARD_MARGIN; row += 1) {
-    for (let col = BOARD_MARGIN; col < cols - BOARD_MARGIN; col += 1) {
-      if (split === "horizontal" && row === centerRow) continue;
-      if (split === "vertical" && col === centerCol) continue;
-      const index = row * cols + col;
-      const belongsFirst = split === "horizontal" ? row < centerRow : col < centerCol;
-      (belongsFirst ? first : second).push(index);
+
+  if (split === "horizontal") {
+    const columns = centeredAxisValues(BOARD_MARGIN, cols - BOARD_MARGIN);
+    const layers = Math.min(centerRow - BOARD_MARGIN, rows - BOARD_MARGIN - centerRow - 1);
+    for (let layer = 0; layer < layers; layer += 1) {
+      const firstRow = centerRow - 1 - layer;
+      const secondRow = centerRow + 1 + layer;
+      columns.forEach((col) => slots.push([firstRow * cols + col, secondRow * cols + col]));
     }
+    return slots;
   }
-  const fixedFirst = split === "horizontal"
-    ? (centerRow - 1) * cols + BOARD_MARGIN
-    : BOARD_MARGIN * cols + centerCol - 1;
-  const fixedSecond = split === "horizontal"
-    ? (centerRow + 1) * cols + BOARD_MARGIN
-    : BOARD_MARGIN * cols + centerCol + 1;
-  const firstSlots = [fixedFirst, ...shuffled(first.filter((index) => index !== fixedFirst))];
-  const secondSlots = [fixedSecond, ...shuffled(second.filter((index) => index !== fixedSecond))];
+
+  const rowsFromCenter = centeredAxisValues(BOARD_MARGIN, rows - BOARD_MARGIN);
+  const layers = Math.min(centerCol - BOARD_MARGIN, cols - BOARD_MARGIN - centerCol - 1);
+  for (let layer = 0; layer < layers; layer += 1) {
+    const firstCol = centerCol - 1 - layer;
+    const secondCol = centerCol + 1 + layer;
+    rowsFromCenter.forEach((row) => slots.push([row * cols + firstCol, row * cols + secondCol]));
+  }
+  return slots;
+}
+
+function splitRemaining(board: (Tile | null)[], split: "horizontal" | "vertical", rows: number, cols: number): (Tile | null)[] {
+  const pairs = shuffled(groupPairIndexes(board));
+  const slotPairs = splitSlotPairs(split, rows, cols);
   const result: (Tile | null)[] = Array(rows * cols).fill(null);
-  pairs.forEach(([a, b], pairIndex) => {
-    result[firstSlots[pairIndex]] = board[a];
-    result[secondSlots[pairIndex]] = board[b];
+
+  const easyPairCount = Math.min(3, pairs.length);
+  pairs.slice(0, easyPairCount).forEach(([a, b], pairIndex) => {
+    const [firstSlot, secondSlot] = slotPairs[pairIndex];
+    result[firstSlot] = board[a];
+    result[secondSlot] = board[b];
+  });
+
+  const remainingPairs = pairs.slice(easyPairCount);
+  const secondSideRotation = remainingPairs.length > 1 ? Math.max(1, Math.floor(remainingPairs.length / 2)) : 0;
+  remainingPairs.forEach(([a], pairIndex) => {
+    const [, secondTile] = remainingPairs[(pairIndex + secondSideRotation) % remainingPairs.length];
+    const [firstSlot, secondSlot] = slotPairs[easyPairCount + pairIndex];
+    result[firstSlot] = board[a];
+    result[secondSlot] = board[secondTile];
   });
   return result;
 }
@@ -765,6 +793,7 @@ export default function Home() {
   const [levelBonus, setLevelBonus] = useState(0);
   const [ghostDraw, setGhostDraw] = useState<GhostDraw | null>(null);
   const ghostTokenRef = useRef(0);
+  const usedGhostEffectsRef = useRef<Set<GhostEffectId>>(new Set());
   const animationTokenRef = useRef(0);
   const rankingRecordedRef = useRef(false);
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -937,6 +966,7 @@ export default function Home() {
   const startNewGame = useCallback(() => {
     const name = playerName.trim().slice(0, 12) || "玩家";
     ghostTokenRef.current += 1;
+    usedGhostEffectsRef.current = new Set();
     animationTokenRef.current += 1;
     rankingRecordedRef.current = false;
     setPlayerName(name);
@@ -963,6 +993,7 @@ export default function Home() {
       return;
     }
     ghostTokenRef.current += 1;
+    usedGhostEffectsRef.current = new Set();
     animationTokenRef.current += 1;
     rankingRecordedRef.current = false;
     setPlayerName(save.playerName);
@@ -1105,6 +1136,7 @@ export default function Home() {
     if (phase !== "levelup") return;
     const nextLevel = level + 1;
     const nextTime = time + levelBonus;
+    usedGhostEffectsRef.current = new Set();
     setLevel(nextLevel);
     setTime(nextTime);
     setBoard(buildBoard(nextLevel, difficulty));
@@ -1133,7 +1165,8 @@ export default function Home() {
   }, [board, boardCols, boardRows, phase, remaining, screen]);
 
   const triggerGhostEffect = useCallback((sourceBoard: (Tile | null)[]) => {
-    const selectedEffectIndex = drawGhostEffectIndex();
+    const selectedEffectIndex = drawGhostEffectIndex(usedGhostEffectsRef.current);
+    usedGhostEffectsRef.current.add(GHOST_EFFECTS[selectedEffectIndex].id);
     const token = ghostTokenRef.current + 1;
     ghostTokenRef.current = token;
     setBoard(sourceBoard);
