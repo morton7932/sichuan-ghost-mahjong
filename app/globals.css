@@ -198,15 +198,24 @@ button { font: inherit; }
 .data-tools-card { width: min(560px,94vw); max-height: 91vh; overflow: auto; padding: 34px; border: 1px solid rgba(214,175,89,.55); color: #e6eee9; background: linear-gradient(145deg,#0c5a43,#063b31); box-shadow: 0 24px 70px rgba(0,0,0,.5),inset 0 0 45px rgba(0,0,0,.18); }
 .data-tools-card h2 { margin: 8px 0; color: #fff1c9; font-family: "Noto Serif TC","Songti TC",serif; font-size: 28px; }
 .data-tools-card>p { margin: 0 0 20px; color: #9ac1af; font: 12px/1.6 "Noto Sans TC","Microsoft JhengHei",sans-serif; }
-.audio-settings { margin-bottom: 18px; padding: 15px; border: 1px solid rgba(214,175,89,.25); background: rgba(1,31,25,.28); }
-.audio-settings>div:first-child { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 11px; }
-.audio-settings strong,.record-transfer h3 { color: #f4dfaa; font-size: 13px; letter-spacing: .08em; }
-.audio-settings>div>small { color: #8eb6a5; font-size: 10px; }
+.audio-settings,.display-settings { margin-bottom: 12px; padding: 15px; border: 1px solid rgba(214,175,89,.25); background: rgba(1,31,25,.28); }
+.audio-settings>div:first-child,.display-settings>div:first-child { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 11px; }
+.audio-settings strong,.display-settings strong,.record-transfer h3 { color: #f4dfaa; font-size: 13px; letter-spacing: .08em; }
+.audio-settings>div>small,.display-settings>div>small { color: #8eb6a5; font-size: 10px; }
 .audio-toggle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .audio-toggle-grid button { display: grid; grid-template-columns: 30px 1fr auto; gap: 8px; align-items: center; padding: 10px; border: 1px solid rgba(255,255,255,.12); color: #a9c4b8; text-align: left; background: rgba(0,0,0,.18); cursor: pointer; }
 .audio-toggle-grid button.active { border-color: rgba(225,188,104,.72); color: #fff0bf; background: rgba(201,159,70,.13); }
 .audio-toggle-grid button>span { color: var(--gold); font-size: 19px; text-align: center; }
 .audio-toggle-grid button>b { font-size: 12px; }.audio-toggle-grid button>small { color: currentColor; font-size: 10px; opacity: .78; }
+.volume-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 13px; }
+.volume-controls label { display: grid; gap: 7px; min-width: 0; color: #aecabd; font-size: 10px; }
+.volume-controls label>span { display: flex; justify-content: space-between; gap: 10px; }
+.volume-controls output { color: #f1cf7f; font-variant-numeric: tabular-nums; }
+.volume-controls input { width: 100%; height: 4px; margin: 4px 0; accent-color: #d6af59; cursor: pointer; }
+.display-mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.display-mode-grid button { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid rgba(255,255,255,.12); color: #aac7ba; text-align: left; background: rgba(0,0,0,.18); cursor: pointer; }
+.display-mode-grid button.active { border-color: rgba(225,188,104,.72); color: #fff0bf; background: rgba(201,159,70,.13); }
+.display-mode-grid b { font-size: 12px; }.display-mode-grid small { color: currentColor; font-size: 9px; line-height: 1.4; opacity: .75; }
 .data-tools-card .record-transfer { margin-top: 0; }
 .record-transfer h3 { margin: 0 0 5px; }.record-transfer .record-description { min-height: 0; margin: 0 0 12px; color: #8eb6a5; font: 10px/1.5 "Noto Sans TC","Microsoft JhengHei",sans-serif; text-align: left; }
 .data-tools-close { width: 100%; margin-top: 12px; padding: 10px; border: 1px solid rgba(214,175,89,.45); color: #e9cf8e; background: transparent; cursor: pointer; }
@@ -226,7 +235,25 @@ button { font: inherit; }
 .mini-ghost { flex: none; display: grid; place-items: center; width: 42px; height: 49px; border-radius: 4px; color: #e2bb65; background: #17201c; font: 700 25px/1 sans-serif; box-shadow: 0 3px 0 #95845f; }
 .angry-mini { background: #2a1c1a; }
 .primary-button { width: auto; min-width: 220px; margin: 28px auto 0; }
-@media (max-width: 980px) {
+@media (min-width: 841px) {
+  .game-shell { height: 100vh; height: 100dvh; min-height: 620px; display: grid; grid-template-rows: auto auto minmax(0,1fr); padding-top: 14px; padding-bottom: 14px; }
+  .topbar { width: 100%; margin-bottom: 10px; }
+  .hud { width: 100%; margin-bottom: 10px; }
+  .play-layout { width: 100%; height: 100%; min-height: 0; }
+  .table-wrap { min-height: 0; display: grid; grid-template-rows: auto auto minmax(0,1fr) auto; }
+  .mahjong-table { min-height: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: #c49b4f rgba(2,39,31,.52); scrollbar-gutter: stable; }
+  .mahjong-table::-webkit-scrollbar { width: 9px; height: 9px; }
+  .mahjong-table::-webkit-scrollbar-track { background: rgba(2,39,31,.52); }
+  .mahjong-table::-webkit-scrollbar-thumb { border: 2px solid rgba(2,39,31,.52); border-radius: 9px; background: #c49b4f; }
+  .board { grid-template-rows: repeat(var(--board-rows,8),minmax(0,1fr)); aspect-ratio: var(--board-aspect,1); }
+  .cell { min-height: 0; aspect-ratio: auto; }
+  .cheats { min-height: 0; overflow: auto; }
+  .display-standard .board { max-width: min(var(--board-max-width,1080px),max(480px,var(--board-standard-width,1080px))); }
+  .display-fit .mahjong-table { container-type: size; display: grid; place-items: center; overflow: hidden; scrollbar-gutter: auto; }
+  .display-fit .board { width: min(100%,var(--board-fit-width,100%)); }
+}
+
+@media (max-width: 840px) {
   .game-shell { padding-inline: 12px; }
   .play-layout { grid-template-columns: 1fr; }
   .cheats { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; padding: 9px; }
@@ -251,6 +278,7 @@ button { font: inherit; }
   .ghost-face { inset: 6%; }.ghost-eyes { font-size: clamp(5px,1.7vw,9px); }.ghost-face b { font-size: clamp(10px,4vw,22px); }.ghost-face small { display: none; }
   .message-bar { min-height: 34px; font-size: 11px; }.cheats button strong { font-size: 11px; }.rules-grid,.ghost-rules { grid-template-columns: 1fr; }
   .ghost-wheel-overlay { padding: 9px; }.ghost-wheel-card { padding: 20px 10px; }.ghost-wheel-card>p { margin-bottom: 15px; }.ghost-wheel-grid { gap: 4px; padding: 5px; }.ghost-option { padding: 9px 2px 7px; }.ghost-option small { display: none; }.ghost-option.active { transform: translateY(-3px) scale(1.03); }.ghost-wheel-status { margin-top: 10px; }
+  .volume-controls { grid-template-columns: 1fr; gap: 10px; }.display-mode-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 410px) { .brand-seal { display: none; }.header-actions { gap: 3px; }.cheats { grid-template-columns: 1fr 1fr; } }
 
