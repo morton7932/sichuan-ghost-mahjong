@@ -58,6 +58,67 @@ test("moves directional ghost effects without reshuffling the tiles", async () =
   assert.match(ghostEffects, /effect === "vertical"[\s\S]*splitRemaining/);
 });
 
+test("fills split sides densely and guarantees easy pairs beside the center gap", async () => {
+  const source = await readFile(pageUrl, "utf8");
+  const splitSource = source.slice(
+    source.indexOf("function centeredAxisValues"),
+    source.indexOf("function applyGhostEffect"),
+  );
+  const executable = ts.transpileModule(
+    `const BOARD_MARGIN = 1; type Tile = { uid: string; kind: string };\n` +
+    `function shuffled<T>(items: T[]): T[] { return [...items]; }\n` +
+    `function groupPairIndexes(board: (Tile | null)[]): number[][] {\n` +
+    `  const groups = new Map<string, number[]>();\n` +
+    `  board.forEach((tile, index) => { if (tile) groups.set(tile.kind, [...(groups.get(tile.kind) ?? []), index]); });\n` +
+    `  return [...groups.values()].flatMap((indexes) => indexes.length >= 2 ? [[indexes[0], indexes[1]]] : []);\n` +
+    `}\n${splitSource}`,
+    { compilerOptions: { target: ts.ScriptTarget.ES2022 } },
+  ).outputText;
+  const helpers = Function(`${executable}\nreturn { splitRemaining, splitSlotPairs };`)();
+  const rows = 9, cols = 11;
+  const board = Array(rows * cols).fill(null);
+  for (let pair = 0; pair < 12; pair += 1) {
+    board[pair * 2] = { uid: `${pair}-a`, kind: `kind-${pair}` };
+    board[pair * 2 + 1] = { uid: `${pair}-b`, kind: `kind-${pair}` };
+  }
+
+  for (const split of ["horizontal", "vertical"]) {
+    const next = helpers.splitRemaining(board, split, rows, cols);
+    const expectedSlots = helpers.splitSlotPairs(split, rows, cols).slice(0, 12).flat().sort((a, b) => a - b);
+    const occupiedSlots = next.flatMap((tile, index) => tile ? [index] : []).sort((a, b) => a - b);
+    assert.deepEqual(occupiedSlots, expectedSlots);
+    if (split === "horizontal") {
+      const centerRow = Math.floor(rows / 2);
+      const easyPairs = Array.from({ length: cols - 2 }, (_, offset) => offset + 1)
+        .filter((col) => next[(centerRow - 1) * cols + col] && next[(centerRow - 1) * cols + col]?.kind === next[(centerRow + 1) * cols + col]?.kind).length;
+      assert.ok(easyPairs >= 3);
+      assert.ok(Array.from({ length: cols }, (_, col) => next[centerRow * cols + col]).every((tile) => tile === null));
+    } else {
+      const centerCol = Math.floor(cols / 2);
+      const easyPairs = Array.from({ length: rows - 2 }, (_, offset) => offset + 1)
+        .filter((row) => next[row * cols + centerCol - 1] && next[row * cols + centerCol - 1]?.kind === next[row * cols + centerCol + 1]?.kind).length;
+      assert.ok(easyPairs >= 3);
+      assert.ok(Array.from({ length: rows }, (_, row) => next[row * cols + centerCol]).every((tile) => tile === null));
+    }
+  }
+});
+
+test("does not draw the same ghost effect twice within a level", async () => {
+  const source = await readFile(pageUrl, "utf8");
+  const drawSource = source.slice(source.indexOf("const GHOST_EFFECTS"), source.indexOf("function seededRandom"));
+  const executable = ts.transpileModule(
+    `type GhostEffectId = "smile" | "angry" | "up" | "down" | "left" | "right" | "in" | "out" | "horizontal" | "vertical";\n${drawSource}`,
+    { compilerOptions: { target: ts.ScriptTarget.ES2022 } },
+  ).outputText;
+  const draw = Function(`${executable}\nreturn { drawGhostEffectIndex, GHOST_EFFECTS };`)();
+  const used = new Set(["smile"]);
+  assert.notEqual(draw.drawGhostEffectIndex(used, () => 0), 0);
+  const allButLast = new Set(draw.GHOST_EFFECTS.slice(0, -1).map((effect) => effect.id));
+  assert.equal(draw.drawGhostEffectIndex(allButLast, () => 0), draw.GHOST_EFFECTS.length - 1);
+  assert.match(source, /usedGhostEffectsRef\.current\.add\(GHOST_EFFECTS\[selectedEffectIndex\]\.id\)/);
+  assert.ok((source.match(/usedGhostEffectsRef\.current = new Set\(\)/g) ?? []).length >= 3);
+});
+
 test("moves inward and outward effects to radial slots without changing the tiles", async () => {
   const source = await readFile(pageUrl, "utf8");
   const slotSource = source.slice(
@@ -239,7 +300,7 @@ test("offers scored board-size difficulties and lightweight match effects", asyn
   assert.match(source, /difficulty: DifficultyId/);
   assert.match(source, /className="match-path-core"/);
   assert.match(source, /const path = findMatchPath\(board, selected, index, boardRows, boardCols\)/);
-  assert.match(source, /const GAME_VERSION = "1\.4\.1"/);
+  assert.match(source, /const GAME_VERSION = "1\.4\.2"/);
   assert.match(source, /className="menu-version">版本 v\{GAME_VERSION\}/);
   assert.match(source, /className="menu-seal" role="img" aria-label="一索鸚鵡"/);
   assert.match(css, /\.tile\.selected::after/);
@@ -266,8 +327,8 @@ test("backs up progress and rankings and supports immediate score settlement", a
   assert.match(source, /const START_TIME = 240/);
   assert.match(source, /const BOARD_MARGIN = 1/);
   assert.match(source, /const GHOST_GAP = 1/);
-  assert.match(source, /row === centerRow/);
-  assert.match(source, /col === centerCol/);
+  assert.match(source, /centerRow \+ 1 \+ layer/);
+  assert.match(source, /centerCol \+ 1 \+ layer/);
   assert.doesNotMatch(source, /setTimeout\(enterNextLevel/);
   assert.match(source, /準備好再繼續/);
   assert.match(source, /showNewGameSetup/);
