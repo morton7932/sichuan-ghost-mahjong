@@ -142,11 +142,36 @@ test("uses lightweight original procedural audio with persisted independent cont
   assert.match(source, /playSoundEffect\(reward\.seconds > 4 \? "bonus" : "match"\)/);
   assert.match(source, /aria-pressed=\{musicEnabled\}/);
   assert.match(source, /aria-pressed=\{soundEnabled\}/);
+  assert.match(source, /musicVolume: normalizeVolume/);
+  assert.match(source, /soundVolume: normalizeVolume/);
+  assert.match(source, /aria-label="音樂音量"/);
+  assert.match(source, /aria-label="音效音量"/);
   assert.match(source, /背景音樂/);
   assert.match(source, /遊戲音效/);
   assert.match(source, /設定與資料/);
   assert.match(css, /\.audio-toggle-grid/);
+  assert.match(css, /\.volume-controls/);
   assert.doesNotMatch(source, /\.(?:mp3|ogg|wav|m4a)/i);
+});
+
+test("keeps desktop status visible with table-only scrolling and an optional fit mode", async () => {
+  const [source, css] = await Promise.all([
+    readFile(pageUrl, "utf8"),
+    readFile(cssUrl, "utf8"),
+  ]);
+
+  assert.match(source, /type DisplayMode = "standard" \| "fit"/);
+  assert.match(source, /const DISPLAY_SETTINGS_KEY = "sichuan-ghost-display-v1"/);
+  assert.match(source, /className=\{`game-shell display-\$\{displayMode\}`\}/);
+  assert.match(source, /標準顯示/);
+  assert.match(source, /一頁顯示/);
+  assert.match(css, /@media \(min-width: 841px\)/);
+  assert.match(css, /\.mahjong-table \{ min-height: 0; overflow: auto/);
+  assert.match(css, /\.display-fit \.mahjong-table[^}]*overflow: hidden/);
+  assert.match(source, /"--board-fit-width": `\$\{boardAspect \* 100\}cqh`/);
+  assert.match(css, /\.display-standard \.board[^}]*--board-standard-width/);
+  assert.match(css, /\.display-fit \.board[^}]*--board-fit-width/);
+  assert.match(css, /@media \(max-width: 620px\)/);
 });
 
 test("includes the cockatoo one-bamboo pair and excludes flower tiles", async () => {
@@ -213,7 +238,7 @@ test("offers scored board-size difficulties and lightweight match effects", asyn
   assert.match(source, /difficulty: DifficultyId/);
   assert.match(source, /className="match-path-core"/);
   assert.match(source, /const path = findMatchPath\(board, selected, index, boardRows, boardCols\)/);
-  assert.match(source, /const GAME_VERSION = "1\.3\.0"/);
+  assert.match(source, /const GAME_VERSION = "1\.4\.0"/);
   assert.match(source, /className="menu-version">版本 v\{GAME_VERSION\}/);
   assert.match(source, /className="menu-seal" role="img" aria-label="一索鸚鵡"/);
   assert.match(css, /\.tile\.selected::after/);

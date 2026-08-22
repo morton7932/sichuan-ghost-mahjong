@@ -3,7 +3,7 @@
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const START_TIME = 240;
-const GAME_VERSION = "1.3.0";
+const GAME_VERSION = "1.4.0";
 const BOARD_MARGIN = 1;
 const GHOST_GAP = 1;
 
@@ -121,13 +121,17 @@ type GameRecordFile = {
   rankings: Ranking[];
 };
 type RecordNotice = { tone: "success" | "error"; text: string };
-type AudioSettings = { music: boolean; sound: boolean };
+type AudioSettings = { music: boolean; sound: boolean; musicVolume: number; soundVolume: number };
+type DisplayMode = "standard" | "fit";
 type SoundEffectName = "click" | "select" | "reject" | "match" | "bonus" | "cheat" | "tick" | "ghost" | "reveal" | "level" | "gameover";
 
 const SAVE_KEY = "sichuan-ghost-save-v1";
 const RANKING_KEY = "sichuan-ghost-ranking-v1";
 const RECORD_FORMAT = "sichuan-ghost-mahjong-record";
 const AUDIO_SETTINGS_KEY = "sichuan-ghost-audio-v1";
+const DISPLAY_SETTINGS_KEY = "sichuan-ghost-display-v1";
+const DEFAULT_MUSIC_VOLUME = 85;
+const DEFAULT_SOUND_VOLUME = 100;
 
 // 原創五聲音階短句，以 Web Audio 即時合成；不載入任何第三方音樂或音效檔。
 const BGM_NOTES = [261.63, 329.63, 392, 329.63, 293.66, 349.23, 440, 349.23];
@@ -135,6 +139,8 @@ const BGM_BASS = [130.81, 146.83, 164.81, 146.83];
 let sharedAudioContext: AudioContext | null = null;
 let backgroundMusicTimer: number | null = null;
 let backgroundMusicStep = 0;
+let musicVolumeLevel = DEFAULT_MUSIC_VOLUME;
+let soundVolumeLevel = DEFAULT_SOUND_VOLUME;
 
 function ensureAudioContext(): AudioContext | null {
   if (typeof window === "undefined") return null;
@@ -143,16 +149,18 @@ function ensureAudioContext(): AudioContext | null {
   return sharedAudioContext;
 }
 
-function scheduleTone(frequency: number, duration: number, volume: number, type: OscillatorType = "sine", delay = 0) {
+function scheduleTone(frequency: number, duration: number, volume: number, type: OscillatorType = "sine", delay = 0, channel: "music" | "sound" = "sound") {
   const context = ensureAudioContext();
   if (!context) return;
+  const channelVolume = channel === "music" ? musicVolumeLevel : soundVolumeLevel;
+  const adjustedVolume = Math.max(0.0001, volume * channelVolume / 100);
   const start = context.currentTime + delay;
   const oscillator = context.createOscillator();
   const gain = context.createGain();
   oscillator.type = type;
   oscillator.frequency.setValueAtTime(frequency, start);
   gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(volume, start + 0.014);
+  gain.gain.exponentialRampToValueAtTime(adjustedVolume, start + 0.014);
   gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
   oscillator.connect(gain).connect(context.destination);
   oscillator.start(start);
@@ -187,8 +195,8 @@ function playSoundEffect(name: SoundEffectName) {
 
 function playBackgroundMusicStep() {
   const noteIndex = backgroundMusicStep % BGM_NOTES.length;
-  scheduleTone(BGM_NOTES[noteIndex], 0.38, 0.018, "sine");
-  if (noteIndex % 4 === 0) scheduleTone(BGM_BASS[Math.floor(backgroundMusicStep / 4) % BGM_BASS.length], 0.72, 0.012, "triangle");
+  scheduleTone(BGM_NOTES[noteIndex], 0.38, 0.028, "sine", 0, "music");
+  if (noteIndex % 4 === 0) scheduleTone(BGM_BASS[Math.floor(backgroundMusicStep / 4) % BGM_BASS.length], 0.72, 0.018, "triangle", 0, "music");
   backgroundMusicStep += 1;
 }
 
@@ -207,14 +215,32 @@ function stopBackgroundMusic() {
 function readAudioSettings(): AudioSettings {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(AUDIO_SETTINGS_KEY) ?? "null") as Partial<AudioSettings> | null;
-    return { music: parsed?.music !== false, sound: parsed?.sound !== false };
+    return {
+      music: parsed?.music !== false,
+      sound: parsed?.sound !== false,
+      musicVolume: normalizeVolume(parsed?.musicVolume, DEFAULT_MUSIC_VOLUME),
+      soundVolume: normalizeVolume(parsed?.soundVolume, DEFAULT_SOUND_VOLUME),
+    };
   } catch {
-    return { music: true, sound: true };
+    return { music: true, sound: true, musicVolume: DEFAULT_MUSIC_VOLUME, soundVolume: DEFAULT_SOUND_VOLUME };
   }
 }
 
 function writeAudioSettings(settings: AudioSettings) {
   try { window.localStorage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify(settings)); } catch { /* 儲存停用時仍可調整本次音訊 */ }
+}
+
+function normalizeVolume(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? Math.min(100, Math.max(0, Math.round(value))) : fallback;
+}
+
+function readDisplayMode(): DisplayMode {
+  try { return window.localStorage.getItem(DISPLAY_SETTINGS_KEY) === "fit" ? "fit" : "standard"; }
+  catch { return "standard"; }
+}
+
+function writeDisplayMode(mode: DisplayMode) {
+  try { window.localStorage.setItem(DISPLAY_SETTINGS_KEY, mode); } catch { /* 顯示設定無法儲存時仍套用本次選擇 */ }
 }
 
 const numerals = ["一", "二", "三", "四", "五", "六", "七", "八", "九"];
@@ -715,6 +741,9 @@ export default function Home() {
   const [recordNotice, setRecordNotice] = useState<RecordNotice | null>(null);
   const [musicEnabled, setMusicEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [musicVolume, setMusicVolume] = useState(DEFAULT_MUSIC_VOLUME);
+  const [soundVolume, setSoundVolume] = useState(DEFAULT_SOUND_VOLUME);
+  const [displayMode, setDisplayMode] = useState<DisplayMode>("standard");
   const [difficulty, setDifficulty] = useState<DifficultyId>(DEFAULT_DIFFICULTY);
   const [level, setLevel] = useState(1);
   const [time, setTime] = useState(START_TIME);
@@ -741,6 +770,8 @@ export default function Home() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const musicEnabledRef = useRef(true);
   const soundEnabledRef = useRef(true);
+  const musicVolumeRef = useRef(DEFAULT_MUSIC_VOLUME);
+  const soundVolumeRef = useRef(DEFAULT_SOUND_VOLUME);
 
   const difficultyConfig = useMemo(() => difficultyById(difficulty), [difficulty]);
   const { rows, cols, multiplier } = difficultyConfig;
@@ -762,6 +793,7 @@ export default function Home() {
   }, [board, boardCols, boardRows, compactBoard]);
   const visualCols = compactBoard ? boardCols - BOARD_MARGIN * 2 : boardCols;
   const visualRows = compactBoard ? boardRows - BOARD_MARGIN * 2 : boardRows;
+  const boardAspect = (visualCols * 0.76) / visualRows;
   const displayedMatchPath = useMemo(() => {
     if (!matchEffect) return [];
     return matchEffect.path.map((point) => compactBoard
@@ -827,12 +859,20 @@ export default function Home() {
       const save = readSave();
       const storedRankings = readRankings();
       const audioSettings = readAudioSettings();
+      const storedDisplayMode = readDisplayMode();
       setSavedProgress(save);
       setRankings(storedRankings);
       setMusicEnabled(audioSettings.music);
       setSoundEnabled(audioSettings.sound);
+      setMusicVolume(audioSettings.musicVolume);
+      setSoundVolume(audioSettings.soundVolume);
+      setDisplayMode(storedDisplayMode);
       musicEnabledRef.current = audioSettings.music;
       soundEnabledRef.current = audioSettings.sound;
+      musicVolumeRef.current = audioSettings.musicVolume;
+      soundVolumeRef.current = audioSettings.soundVolume;
+      musicVolumeLevel = audioSettings.musicVolume;
+      soundVolumeLevel = audioSettings.soundVolume;
       if (!audioSettings.music) stopBackgroundMusic();
       else if (sharedAudioContext) startBackgroundMusic();
       if (save?.playerName) setPlayerName(save.playerName);
@@ -852,7 +892,7 @@ export default function Home() {
     const next = !musicEnabledRef.current;
     musicEnabledRef.current = next;
     setMusicEnabled(next);
-    writeAudioSettings({ music: next, sound: soundEnabledRef.current });
+    writeAudioSettings({ music: next, sound: soundEnabledRef.current, musicVolume: musicVolumeRef.current, soundVolume: soundVolumeRef.current });
     if (next) startBackgroundMusic();
     else stopBackgroundMusic();
   }, []);
@@ -861,8 +901,29 @@ export default function Home() {
     const next = !soundEnabledRef.current;
     soundEnabledRef.current = next;
     setSoundEnabled(next);
-    writeAudioSettings({ music: musicEnabledRef.current, sound: next });
+    writeAudioSettings({ music: musicEnabledRef.current, sound: next, musicVolume: musicVolumeRef.current, soundVolume: soundVolumeRef.current });
     if (next) playSoundEffect("click");
+  }, []);
+
+  const updateMusicVolume = useCallback((value: number) => {
+    const next = normalizeVolume(value, DEFAULT_MUSIC_VOLUME);
+    musicVolumeRef.current = next;
+    musicVolumeLevel = next;
+    setMusicVolume(next);
+    writeAudioSettings({ music: musicEnabledRef.current, sound: soundEnabledRef.current, musicVolume: next, soundVolume: soundVolumeRef.current });
+  }, []);
+
+  const updateSoundVolume = useCallback((value: number) => {
+    const next = normalizeVolume(value, DEFAULT_SOUND_VOLUME);
+    soundVolumeRef.current = next;
+    soundVolumeLevel = next;
+    setSoundVolume(next);
+    writeAudioSettings({ music: musicEnabledRef.current, sound: soundEnabledRef.current, musicVolume: musicVolumeRef.current, soundVolume: next });
+  }, []);
+
+  const updateDisplayMode = useCallback((mode: DisplayMode) => {
+    setDisplayMode(mode);
+    writeDisplayMode(mode);
   }, []);
 
   const charge = useCallback((cost: number) => {
@@ -1323,7 +1384,7 @@ export default function Home() {
                     : storageReady ? "此瀏覽器尚無存檔" : "正在讀取…"}</small>
                 </button>
                 <button onClick={() => setScreen("leaderboard")}><b>排行榜</b><small>查看此瀏覽器的最佳牌局</small></button>
-                <button onClick={() => { setShowNewGameSetup(false); setShowDataTools(true); }}><b>設定與資料</b><small>音訊、紀錄備份與遊戲下載</small></button>
+                <button onClick={() => { setShowNewGameSetup(false); setShowDataTools(true); }}><b>設定與資料</b><small>顯示、音訊、紀錄備份與下載</small></button>
                 <button onClick={() => setScreen("exit")}><b>結束遊戲</b><small>離開牌桌</small></button>
               </nav>
               <p className="storage-note">進度只保存在這台裝置的瀏覽器。中途離開時，會回到本關開始前的存檔。</p>
@@ -1397,13 +1458,34 @@ export default function Home() {
               <h2 id="data-tools-title">設定與資料</h2>
               <p>音訊由程式即時合成，不載入外部音樂檔；設定會保存在這台瀏覽器。</p>
               <section className="audio-settings" aria-label="音訊設定">
-                <div><strong>音訊設定</strong><small>音樂與效果可分別關閉</small></div>
+                <div><strong>音訊設定</strong><small>可分別開關與調整音量</small></div>
                 <div className="audio-toggle-grid">
                   <button type="button" className={musicEnabled ? "active" : ""} aria-pressed={musicEnabled} onClick={toggleMusic}>
                     <span aria-hidden="true">♫</span><b>背景音樂</b><small>{musicEnabled ? "開啟" : "關閉"}</small>
                   </button>
                   <button type="button" className={soundEnabled ? "active" : ""} aria-pressed={soundEnabled} onClick={toggleSound}>
                     <span aria-hidden="true">◖))</span><b>遊戲音效</b><small>{soundEnabled ? "開啟" : "關閉"}</small>
+                  </button>
+                </div>
+                <div className="volume-controls">
+                  <label>
+                    <span>音樂音量 <output>{musicVolume}%</output></span>
+                    <input type="range" min="0" max="100" step="5" value={musicVolume} onChange={(event) => updateMusicVolume(Number(event.target.value))} aria-label="音樂音量" />
+                  </label>
+                  <label>
+                    <span>音效音量 <output>{soundVolume}%</output></span>
+                    <input type="range" min="0" max="100" step="5" value={soundVolume} onChange={(event) => updateSoundVolume(Number(event.target.value))} aria-label="音效音量" />
+                  </label>
+                </div>
+              </section>
+              <section className="display-settings" aria-label="桌面顯示設定">
+                <div><strong>桌面顯示</strong><small>手機版維持目前顯示方式</small></div>
+                <div className="display-mode-grid" role="group" aria-label="桌面牌面顯示方式">
+                  <button type="button" className={displayMode === "standard" ? "active" : ""} aria-pressed={displayMode === "standard"} onClick={() => updateDisplayMode("standard")}>
+                    <b>標準顯示</b><small>牌面較大，捲軸只在牌桌內</small>
+                  </button>
+                  <button type="button" className={displayMode === "fit" ? "active" : ""} aria-pressed={displayMode === "fit"} onClick={() => updateDisplayMode("fit")}>
+                    <b>一頁顯示</b><small>縮小牌面，不需上下捲動</small>
                   </button>
                 </div>
               </section>
@@ -1447,7 +1529,7 @@ export default function Home() {
   }
 
   return (
-    <main className="game-shell">
+    <main className={`game-shell display-${displayMode}`}>
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
       <header className="topbar">
@@ -1483,6 +1565,10 @@ export default function Home() {
               aria-label={`${difficultyConfig.label} ${rows} 乘 ${cols} 四川省麻將牌盤`}
               style={{
                 "--board-cols": visualCols,
+                "--board-rows": visualRows,
+                "--board-aspect": boardAspect,
+                "--board-fit-width": `${boardAspect * 100}cqh`,
+                "--board-standard-width": `calc(${boardAspect * 120}dvh - ${boardAspect * 240}px)`,
                 "--board-max-width": `${Math.min(1280, visualCols * 88)}px`,
                 "--cell-offset-x": `calc(${boardOffset.col * 100}% + ${boardOffset.col} * var(--board-gap))`,
                 "--cell-offset-y": `calc(${boardOffset.row * 100}% + ${boardOffset.row} * var(--board-gap))`,
