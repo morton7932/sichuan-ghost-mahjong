@@ -166,6 +166,7 @@ test("keeps desktop status visible with table-only scrolling and an optional fit
   assert.match(source, /標準顯示/);
   assert.match(source, /一頁顯示/);
   assert.match(css, /@media \(min-width: 841px\)/);
+  assert.match(css, /\.game-shell \{[^}]*overflow: clip/);
   assert.match(css, /\.mahjong-table \{ min-height: 0; overflow: auto/);
   assert.match(css, /\.display-fit \.mahjong-table[^}]*overflow: hidden/);
   assert.match(source, /"--board-fit-width": `\$\{boardAspect \* 100\}cqh`/);
@@ -238,7 +239,7 @@ test("offers scored board-size difficulties and lightweight match effects", asyn
   assert.match(source, /difficulty: DifficultyId/);
   assert.match(source, /className="match-path-core"/);
   assert.match(source, /const path = findMatchPath\(board, selected, index, boardRows, boardCols\)/);
-  assert.match(source, /const GAME_VERSION = "1\.4\.0"/);
+  assert.match(source, /const GAME_VERSION = "1\.4\.1"/);
   assert.match(source, /className="menu-version">版本 v\{GAME_VERSION\}/);
   assert.match(source, /className="menu-seal" role="img" aria-label="一索鸚鵡"/);
   assert.match(css, /\.tile\.selected::after/);

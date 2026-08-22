@@ -3,7 +3,7 @@
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const START_TIME = 240;
-const GAME_VERSION = "1.4.0";
+const GAME_VERSION = "1.4.1";
 const BOARD_MARGIN = 1;
 const GHOST_GAP = 1;
 
